@@ -1,0 +1,19 @@
+{
+  "name": "zero-ben-backend",
+  "version": "1.0.0",
+  "private": true,
+  "main": "src/index.js",
+  "scripts": {
+    "deploy": "wrangler deploy"
+  },
+  "dependencies": {
+    "axios": "^1.13.4",
+    "dayjs": "^1.11.19",
+    "echarts": "^6.0.0",
+    "jsonwebtoken": "^9.0.0",
+    "vue-router": "^5.0.0"
+  },
+  "devDependencies": {
+    "wrangler": "^4.61.1"
+  }
+}

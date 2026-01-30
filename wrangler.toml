@@ -1,0 +1,19 @@
+name = "zero-ben-backend"
+main = "src/index.js"
+compatibility_date = "2024-10-01"
+compatibility_flags = [ "nodejs_compat" ]
+# 数据库绑定
+[[d1_databases]]
+binding = "DB"
+database_name = "security-db"
+database_id = "824f19e0-9343-4e10-b693-88e314a3880b"
+
+[triggers]
+crons = [
+    "* * * * *"  # 每分钟触发一次，内部逻辑判断时间
+]
+
+[vars]
+JWT_SECRET = "linkbrainsecurity"
+ADMIN_PASSWORD_SALT = "lingbenzhengquanjiaoyi"
+ADMIN_PASSWORD_HASH = "ad96d22ea0ee883b1c73617087cb053d0ada8f36b2410f2e3462b02774d93468"

@@ -1,0 +1,32 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --ths-red: #e02020;
+  --ths-green: #009040;
+  --ths-bg: #f4f5f7;
+  --ths-border: #dde2e6;
+}
+
+body {
+  background-color: var(--ths-bg);
+  font-family: 'Inter', -apple-system, sans-serif;
+  color: #1a1a1a;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* 金融数字专用 */
+/* .font-mono {
+  font-family: 'Roboto Mono', monospace !important;
+  letter-spacing: -0.5px;
+} */
+
+/* 移除大圆角，改为冷静的微圆角 */
+.rounded-xl { border-radius: 4px !important; }
+.rounded-2xl, .rounded-3xl { border-radius: 6px !important; }
+
+/* 紧凑型按钮 */
+.btn-pro {
+  @apply px-4 py-2 text-xs font-bold transition-all active:scale-95 flex items-center justify-center;
+}
