@@ -1,23 +1,30 @@
 import jwt from 'jsonwebtoken';
 
 export const verifyPassword = async (password, env) => {
+    if (typeof password !== 'string' || !password) return false;
+    if (!env.ADMIN_PASSWORD_HASH) return false;
+
     const encoder = new TextEncoder();
-    console.log(env.ADMIN_PASSWORD_SALT,env)
-    const salt = encoder.encode(env.ADMIN_PASSWORD_SALT || "secure_default_salt");
-    const baseKey = await crypto.subtle.importKey("raw", encoder.encode(password), "PBKDF2", false, ["deriveBits"]);
-    
+    const salt = encoder.encode(env.ADMIN_PASSWORD_SALT || 'secure_default_salt');
+    const baseKey = await crypto.subtle.importKey('raw', encoder.encode(password), 'PBKDF2', false, ['deriveBits']);
+
     const derivedBits = await crypto.subtle.deriveBits(
-        { name: "PBKDF2", salt, iterations: 100000, hash: "SHA-256" },
-        baseKey, 256
+        { name: 'PBKDF2', salt, iterations: 100000, hash: 'SHA-256' },
+        baseKey,
+        256
     );
 
-    const derivedHex = Array.from(new Uint8Array(derivedBits)).map(b => b.toString(16).padStart(2, '0')).join('');
-    
-    // 恒定时间比较，防止计时攻击
+    const derivedHex = Array.from(new Uint8Array(derivedBits))
+        .map((b) => b.toString(16).padStart(2, '0'))
+        .join('');
+
     let diff = 0;
-    const hash = env.ADMIN_PASSWORD_HASH;
-    for (let i = 0; i < derivedHex.length; i++) {
-        diff |= derivedHex.charCodeAt(i) ^ hash.charCodeAt(i);
+    const hash = String(env.ADMIN_PASSWORD_HASH);
+    const maxLen = Math.max(derivedHex.length, hash.length);
+    for (let i = 0; i < maxLen; i++) {
+        const left = i < derivedHex.length ? derivedHex.charCodeAt(i) : 0;
+        const right = i < hash.length ? hash.charCodeAt(i) : 0;
+        diff |= left ^ right;
     }
     return diff === 0 && derivedHex.length === hash.length;
 };
@@ -32,5 +39,8 @@ export const verifyAuth = (request, env) => {
     try {
         const decoded = jwt.verify(token, env.JWT_SECRET);
         return decoded.role === 'admin';
-    } catch { return false; }
+    } catch {
+        return false;
+    }
 };
+

@@ -1,9 +1,8 @@
-<template>
+﻿<template>
   <router-view />
+  <ToastCenter />
 </template>
 
-<style>
-body {
-  background-color: #0f172a;
-}
-</style>
+<script setup lang="ts">
+import ToastCenter from './components/ToastCenter.vue';
+</script>

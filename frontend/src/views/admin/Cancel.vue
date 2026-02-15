@@ -1,52 +1,86 @@
-<template>
-    <div class="p-4">
-      <h2 class="text-sm font-semibold text-gray-900 mb-3">当前委托</h2>
-      
-      <div v-if="pendingOrders.length === 0" class="text-center text-gray-500 py-8">
-        <p class="text-sm mb-1">暂无活动委托</p>
-        <p class="text-[11px] text-gray-400">委托记录将在交易完成后自动消失</p>
+﻿<template>
+  <div class="space-y-3">
+    <section class="glass-card p-4">
+      <div class="flex flex-wrap items-center justify-between gap-2">
+        <h2 class="panel-title">撤单中心</h2>
+        <div class="text-xs text-slate-600">可撤订单: {{ pendingCount }}</div>
       </div>
-      
-      <div v-for="order in pendingOrders" :key="order.id" 
-           class="bg-white rounded-lg p-3 mb-2 border border-gray-200 flex justify-between items-center">
-          <div class="flex-1 min-w-0">
-              <div class="flex items-center gap-2 mb-1">
-                  <span class="text-[11px] px-1.5 py-0.5 rounded text-white font-medium"
-                        :class="order.side === 'BUY' ? 'bg-red-600' : 'bg-green-600'">
-                      {{ order.side === 'BUY' ? '买' : '卖' }}
-                  </span>
-                  <span class="text-sm font-medium text-gray-900 truncate">{{ order.name }}</span>
-              </div>
-              <div class="flex justify-between items-center text-[11px] text-gray-500">
-                <span class="font-mono">{{ order.price }}元 / {{ order.qty }}股</span>
-                <span>{{ order.time }}</span>
-              </div>
-          </div>
-          <button @click="doCancel(order.id)" 
-                  class="ml-3 px-3 py-1.5 rounded text-xs font-medium border border-blue-600 text-blue-600 hover:bg-blue-50 active:bg-blue-100 transition-colors">
-              撤单
-          </button>
+      <p class="mt-2 text-xs text-slate-600">仅状态为“挂单中 / 撮合中”的委托支持撤销；撤销后资金与可卖持仓会自动回补。</p>
+      <div class="mt-3 flex gap-2">
+        <button class="btn-solid btn-ghost" @click="refresh">刷新数据</button>
+        <button class="btn-solid btn-primary" @click="cancelAllPending" :disabled="pendingCount === 0 || bulkCancelling">
+          {{ bulkCancelling ? '处理中...' : '一键撤销挂单' }}
+        </button>
       </div>
-    </div>
-  </template>
-  
-  <script setup lang="ts">
-  import { computed } from 'vue';
-  import { useMarketStore } from '../../stores/market';
-  import api from '../../api';
-  
-  const store = useMarketStore();
-  const pendingOrders = computed(() => store.orders.filter((o:any) => o.status === 'PENDING'));
-  
-  const doCancel = async (id: number) => {
-      if(!confirm('确认撤单?')) return;
-      await api.cancel(id);
-      store.fetchAdminData();
-  };
-  </script>
-  
-  <style scoped>
-  .font-mono {
-    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    </section>
+
+    <InsightPanel title="撤单执行提示" :items="insightItems" />
+
+    <OrderList :orders="store.orders" :can-cancel="true" @cancel="onCancel" />
+  </div>
+</template>
+
+<script setup lang="ts">
+import { computed, ref } from 'vue';
+import api from '../../api';
+import InsightPanel from '../../components/InsightPanel.vue';
+import OrderList from '../../components/OrderList.vue';
+import { useMarketStore } from '../../stores/market';
+import { notifySuccess, notifyWarning } from '../../utils/notify';
+
+const store = useMarketStore();
+const bulkCancelling = ref(false);
+
+const pendingOrders = computed(() => store.orders.filter((o: any) => o.status === 'PENDING' || o.status === 'MATCHING'));
+const pendingCount = computed(() => pendingOrders.value.length);
+
+const insightItems = computed(() => {
+  return [
+    {
+      title: '撤单时效',
+      text: '订单已成交或状态更新后，将无法撤销。建议在挂单后及时关注状态。',
+      level: 'risk'
+    },
+    {
+      title: '资金回补',
+      text: '买入撤单会释放冻结资金，卖出撤单会恢复可卖持仓。',
+      level: 'info'
+    },
+    {
+      title: '批量操作',
+      text: '一键撤单将逐笔提交，期间请勿重复点击。',
+      level: 'info'
+    }
+  ] as Array<{ title: string; text: string; level: 'info' | 'risk' | 'ok' }>;
+});
+
+const refresh = async () => {
+  await store.fetchAdminData(true);
+};
+
+const onCancel = async (id: number) => {
+  if (!window.confirm('确认撤销该委托？')) return;
+  await api.cancel(id);
+  notifySuccess('撤单成功', `订单 #${id} 已提交撤销。`, '请关注订单状态与资金回补。');
+  await store.fetchAdminData();
+};
+
+const cancelAllPending = async () => {
+  if (pendingOrders.value.length === 0) {
+    notifyWarning('当前无可撤订单', '没有处于挂单或撮合中的订单。');
+    return;
   }
-  </style>
+  if (!window.confirm(`确认撤销 ${pendingOrders.value.length} 笔挂单？`)) return;
+
+  bulkCancelling.value = true;
+  try {
+    for (const order of pendingOrders.value) {
+      await api.cancel(order.id);
+    }
+    notifySuccess('批量撤单完成', `共处理 ${pendingOrders.value.length} 笔订单。`, '建议刷新后核对状态。');
+  } finally {
+    bulkCancelling.value = false;
+    await store.fetchAdminData();
+  }
+};
+</script>

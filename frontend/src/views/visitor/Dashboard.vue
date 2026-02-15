@@ -1,431 +1,244 @@
-<template>
-    <div class="min-h-screen bg-gray-50 text-gray-900 pb-10">
-      <!-- Header - 沉稳设计 -->
-      <div class="px-4 pt-4 pb-3 flex justify-between items-center bg-white border-b border-gray-200">
-          <div class="flex items-center gap-3">
-              <div class="w-8 h-8 rounded-lg bg-gray-900 flex items-center justify-center">
-                  <span class="text-white font-medium text-sm">零</span>
+﻿<template>
+  <div class="mx-auto min-h-screen w-full max-w-[1320px] px-3 pb-6 pt-3 md:px-6 md:pt-5">
+    <header class="glass-card mb-3 p-4 md:p-5 fade-rise">
+      <div class="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <p class="text-[11px] uppercase tracking-[0.25em] text-slate-500">Zero Ben · Public Board</p>
+          <h1 class="mt-1 text-2xl font-extrabold text-slate-900">公开资产总览</h1>
+          <p class="mt-1 text-xs text-slate-600">{{ nowText }} · 数据每 15 秒自动刷新</p>
+        </div>
+        <div class="flex gap-2">
+          <button class="btn-solid btn-ghost" @click="loadOverview">刷新</button>
+          <button class="btn-solid btn-primary" @click="$router.push('/login')">管理员登录</button>
+        </div>
+      </div>
+    </header>
+
+    <section class="grid gap-3 lg:grid-cols-[1.35fr,1fr]">
+      <article class="glass-card p-4 md:p-5 fade-rise">
+        <div class="grid gap-3 md:grid-cols-3">
+          <div class="md:col-span-2">
+            <div class="kv-label">总资产 (CNY)</div>
+            <div class="mt-2 text-3xl font-extrabold font-mono text-slate-900">¥{{ formatMoney(data.assets.total) }}</div>
+            <div class="mt-2 flex flex-wrap gap-2 text-xs">
+              <span class="tag" :class="Number(data.assets.return_total_pct) >= 0 ? 'tag-pos' : 'tag-neg'">累计收益 {{ formatPct(data.assets.return_total_pct) }}</span>
+              <span class="tag" :class="Number(data.assets.day_pct) >= 0 ? 'tag-pos' : 'tag-neg'">当日 {{ formatPct(data.assets.day_pct) }}</span>
+              <span class="tag tag-neutral">冻结 ¥{{ formatMoney(data.assets.frozen) }}</span>
+            </div>
+          </div>
+          <div class="rounded-xl border border-[var(--line)] bg-white/85 p-3">
+            <div class="kv-label">持仓市值</div>
+            <div class="mt-1 font-mono text-lg font-bold text-slate-800">¥{{ formatMoney(data.assets.market_cap) }}</div>
+            <div class="mt-2 text-xs text-slate-600">可用资金 ¥{{ formatMoney(data.assets.balance) }}</div>
+          </div>
+        </div>
+
+        <div class="mt-4">
+          <div class="mb-2 flex items-center justify-between">
+            <h2 class="panel-title">资产趋势</h2>
+            <span class="text-xs text-slate-500">{{ chartPoints.length }} 点</span>
+          </div>
+          <div ref="chartRef" class="h-[300px] w-full"></div>
+        </div>
+      </article>
+
+      <div class="space-y-3 fade-rise">
+        <article class="glass-card overflow-hidden">
+          <div class="flex items-center justify-between border-b border-[var(--line)] px-4 py-3">
+            <h2 class="panel-title">交易播报</h2>
+            <span class="text-xs text-slate-500">{{ data.logs.length }} 条</span>
+          </div>
+
+          <div class="max-h-[280px] overflow-y-auto scrollbar-thin px-4 py-3">
+            <div v-if="data.logs.length === 0" class="py-6 text-center text-sm text-slate-500">暂无交易播报</div>
+            <div v-for="(log, idx) in data.logs" :key="idx" class="mb-2 rounded-xl border border-[var(--line)] bg-white/90 p-3">
+              <div class="flex items-center justify-between gap-2">
+                <div class="text-sm font-semibold text-slate-800">{{ log.text }}</div>
+                <span class="text-[11px] text-slate-500">{{ log.time }}</span>
               </div>
-              <div>
-                  <h1 class="text-base font-bold text-gray-900">零本证券</h1>
-                  <p class="text-[11px] text-gray-500 mt-0.5">公开资产总览</p>
-              </div>
-          </div>
-          <button @click="$router.push('/login')" 
-                  class="p-2 rounded-lg bg-gray-100 active:bg-gray-200 transition-colors">
-              <svg class="w-4 h-4 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"></path>
-              </svg>
-          </button>
-      </div>
-  
-      <!-- 1. 核心资产卡片 -->
-      <div class="mx-4 mt-4 bg-white rounded-xl p-4 border border-gray-200">
-          <div class="flex justify-between items-start mb-5">
-            <div>
-              <p class="text-xs text-gray-500 mb-1">总资产 (CNY)</p>
-              <h2 class="text-2xl font-bold font-mono text-gray-900 leading-none">
-                {{ formatMoney(data.assets.total) }}
-              </h2>
-            </div>
-            <div class="text-right">
-              <span class="inline-flex items-center gap-1 px-2.5 py-1 rounded text-xs font-medium bg-blue-50 text-blue-700">
-                累计收益 {{ data.assets.return_total_pct > 0 ? '+' : '' }}{{ data.assets.return_total_pct }}%
-              </span>
+              <div class="mt-1 text-xs text-slate-600">{{ log.detail }}</div>
             </div>
           </div>
-  
-          <!-- 盈亏卡片组 -->
-          <div class="grid grid-cols-2 gap-3 mb-5">
-              <div class="bg-gray-50 p-3 rounded-lg border border-gray-100">
-                  <p class="text-[11px] text-gray-500 mb-1.5">当日盈亏</p>
-                  <div class="flex items-end gap-1">
-                      <p class="text-lg font-bold font-mono" :class="getColor(data.assets.day_pnl)">
-                          {{ data.assets.day_pnl > 0 ? '+' : '' }}{{ formatMoney(data.assets.day_pnl) }}
-                      </p>
-                      <span class="text-[13px] font-medium mb-0.5" :class="getColor(data.assets.day_pct)">
-                          ({{ data.assets.day_pct > 0 ? '+' : '' }}{{ data.assets.day_pct }}%)
-                      </span>
-                  </div>
-              </div>
-              <div class="bg-gray-50 p-3 rounded-lg border border-gray-100">
-                   <p class="text-[11px] text-gray-500 mb-1.5">持仓盈亏</p>
-                   <p class="text-lg font-bold font-mono text-gray-900">
-                     {{ data.assets.pnl_holding > 0 ? '+' : '' }}{{ formatMoney(data.assets.pnl_holding) }}
-                   </p>
-              </div>
-          </div>
-  
-          <!-- 资产指标 -->
-          <div class="grid grid-cols-3 gap-3 pt-4 border-t border-gray-200">
-            <div class="text-center">
-              <p class="text-[11px] text-gray-500 mb-1">持仓市值</p>
-              <p class="text-sm font-semibold font-mono text-gray-900">{{ formatMoney(data.assets.market_cap) }}</p>
-            </div>
-            <div class="text-center">
-              <p class="text-[11px] text-gray-500 mb-1">可用资金</p>
-              <p class="text-sm font-semibold font-mono text-gray-900">{{ formatMoney(data.assets.balance) }}</p>
-            </div>
-            <div class="text-center">
-              <p class="text-[11px] text-gray-500 mb-1">最大回撤</p>
-              <p class="text-sm font-semibold font-mono text-green-700">{{ data.assets.max_drawdown }}%</p>
-            </div>
-          </div>
+        </article>
+
+        <InsightPanel title="公开看板说明" :items="publicHints" />
       </div>
-  
-      <!-- 2. 收益走势图 -->
-      <div class="mt-4 px-4">
-          <div class="flex justify-between items-center mb-3">
-            <div>
-              <h3 class="text-sm font-semibold text-gray-900">收益走势</h3>
-              <p class="text-[11px] text-gray-500 mt-0.5">日频数据</p>
-            </div>
-            <span class="text-[11px] text-blue-600 px-2 py-1 bg-blue-50 rounded">Daily</span>
-          </div>
-          
-          <!-- 图表容器 -->
-          <div class="bg-white rounded-xl p-3 border border-gray-200">
-            <div ref="chartRef" class="h-48 w-full"></div>
-          </div>
+    </section>
+
+    <section class="glass-card mt-3 overflow-hidden fade-rise">
+      <div class="flex items-center justify-between border-b border-[var(--line)] px-4 py-3">
+        <h2 class="panel-title">持仓明细</h2>
+        <span class="text-xs text-slate-500">{{ data.holdings.length }} 只</span>
       </div>
-  
-      <!-- 3. 最新调仓日志 -->
-      <div class="mt-4 px-4">
-          <div class="flex justify-between items-center mb-3">
-              <h3 class="text-sm font-semibold text-gray-900">最新调仓</h3>
-              <span class="text-[11px] text-gray-500">{{ data.logs.length }} 条记录</span>
-          </div>
-          
-          <div class="space-y-2">
-               <div v-for="(log, idx) in data.logs" :key="idx" 
-                    class="bg-white rounded-lg p-3 border border-gray-200">
-                  <div class="flex items-center gap-3">
-                      <div class="w-8 h-8 rounded-lg flex items-center justify-center text-xs font-semibold border"
-                        :class="log.side === 'BUY' ? 'border-red-300 text-red-700 bg-red-50' : 'border-green-300 text-green-700 bg-green-50'">
-                        {{ log.side === 'BUY' ? '买' : '卖' }}
-                      </div>
-                      <div class="flex-1 min-w-0">
-                          <div class="flex justify-between items-center">
-                              <span class="text-sm font-medium text-gray-900 truncate">{{ log.text }}</span>
-                              <span class="text-[11px] text-gray-500 font-mono shrink-0 ml-2">
-                                  {{ log.time.split(' ')[0] }}
-                              </span>
-                          </div>
-                          <div class="mt-1">
-                            <span class="text-[11px] text-gray-500 font-mono truncate">{{ log.detail }}</span>
-                          </div>
-                      </div>
-                  </div>
-               </div>
-          </div>
+
+      <div v-if="data.holdings.length === 0" class="px-4 py-10 text-center text-sm text-slate-500">暂无持仓</div>
+
+      <div v-else class="overflow-x-auto scrollbar-thin">
+        <table class="min-w-full text-sm">
+          <thead class="data-table-head">
+            <tr>
+              <th class="px-4 py-3 text-left">证券</th>
+              <th class="px-4 py-3 text-right">数量</th>
+              <th class="px-4 py-3 text-right">现价</th>
+              <th class="px-4 py-3 text-right">浮盈亏</th>
+              <th class="px-4 py-3 text-right">仓位</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-for="h in data.holdings" :key="h.code" class="border-t border-[var(--line)]/70">
+              <td class="px-4 py-3">
+                <div class="font-semibold text-slate-800">{{ h.name }}</div>
+                <div class="font-mono text-xs text-slate-500">{{ h.code }}</div>
+              </td>
+              <td class="px-4 py-3 text-right font-mono text-slate-700">{{ formatQty(h.quantity) }}</td>
+              <td class="px-4 py-3 text-right font-mono text-slate-700">¥{{ formatMoney(h.price) }}</td>
+              <td class="px-4 py-3 text-right font-mono" :class="getColor(h.pnl_val)">¥{{ formatMoney(h.pnl_val) }}</td>
+              <td class="px-4 py-3 text-right font-mono text-slate-700">{{ h.position_rate }}%</td>
+            </tr>
+          </tbody>
+        </table>
       </div>
-      
-      <!-- 4. 证券持仓明细 -->
-      <div class="mt-4 px-4 pb-6">
-          <div class="flex justify-between items-center mb-3">
-              <h3 class="text-sm font-semibold text-gray-900">证券持仓</h3>
-              <span class="text-[11px] text-blue-600 font-medium">{{ data.holdings.length }} 只股票</span>
-          </div>
-          
-          <div class="space-y-2">
-              <div v-for="h in data.holdings" :key="h.code" 
-                   class="bg-white rounded-lg p-4 border border-gray-200">
-                  <!-- 第一行：股票名称和价格 -->
-                  <div class="flex justify-between items-start mb-3">
-                      <div class="flex items-center gap-3">
-                          <div class="w-10 h-10 rounded-lg bg-gray-100 flex items-center justify-center">
-                              <span class="text-base font-semibold text-gray-700">{{ h.name.charAt(0) }}</span>
-                          </div>
-                          <div>
-                              <div class="font-semibold text-sm text-gray-900">{{ h.name }}</div>
-                              <div class="text-[11px] text-gray-500 font-mono mt-0.5">{{ h.code }}</div>
-                          </div>
-                      </div>
-                      <div class="text-right">
-                          <div class="font-bold text-base font-mono text-gray-900">{{ h.price }}</div>
-                          <div class="text-xs font-bold font-mono mt-1 px-2 py-1 rounded"
-                               :class="h.pnl_rate >= 0 ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'">
-                              {{ h.pnl_rate > 0 ? '+' : '' }}{{ h.pnl_rate }}%
-                          </div>
-                      </div>
-                  </div>
-                  
-                  <!-- 第二行：详细指标 -->
-                  <div class="grid grid-cols-3 gap-3 pt-3 border-t border-gray-200">
-                      <div>
-                        <p class="text-[11px] text-gray-500 mb-1">成本价</p>
-                        <p class="text-sm font-semibold font-mono text-gray-900">{{ h.cost }}</p>
-                      </div>
-                      <div class="text-center">
-                        <p class="text-[11px] text-gray-500 mb-1">仓位</p>
-                        <div class="relative">
-                          <div class="h-1 w-full bg-gray-200 rounded-full overflow-hidden">
-                            <div class="h-full bg-blue-600 rounded-full" 
-                                 :style="{ width: Math.min(h.position_rate, 100) + '%' }"></div>
-                          </div>
-                          <p class="text-sm font-semibold font-mono text-blue-700 mt-1">
-                            {{ h.position_rate }}%
-                          </p>
-                        </div>
-                      </div>
-                      <div class="text-right">
-                        <p class="text-[11px] text-gray-500 mb-1">浮动盈亏</p>
-                        <p class="text-sm font-semibold font-mono" :class="getColor(h.pnl_val)">
-                          {{ h.pnl_val > 0 ? '+' : '' }}{{ h.pnl_val }}
-                        </p>
-                      </div>
-                  </div>
-              </div>
-          </div>
-      </div>
-  
-      <!-- 5. 页脚信息 -->
-      <div class="px-4 text-center mt-4 pt-4 border-t border-gray-200">
-        <p class="text-[10px] text-gray-400">行情数据来源于腾讯/新浪 • 仅供模拟交易参考</p>
-      </div>
-    </div>
-  </template>
-  
-  <script setup lang="ts">
-  import { ref, onMounted, reactive, nextTick } from 'vue';
-  import * as echarts from 'echarts';
-  import api from '../../api';
-  import { formatMoney, getColor } from '../../utils/format';
-  
-  const chartRef = ref(null);
-  const data = reactive({
-      assets: {
-          total: 0, market_cap: 0, balance: 0, pnl_holding: 0, day_pnl: 0, day_pct: 0, return_total_pct: 0, max_drawdown: 0
+    </section>
+  </div>
+</template>
+
+<script setup lang="ts">
+import { computed, nextTick, onMounted, onUnmounted, reactive, ref } from 'vue';
+import * as echarts from 'echarts';
+import api from '../../api';
+import InsightPanel from '../../components/InsightPanel.vue';
+import { formatMoney, formatPct, formatQty, getColor, shanghaiNowText } from '../../utils/format';
+
+const chartRef = ref<HTMLElement | null>(null);
+let chart: echarts.ECharts | null = null;
+
+const data = reactive<any>({
+  assets: {
+    total: 0,
+    market_cap: 0,
+    balance: 0,
+    frozen: 0,
+    pnl_holding: 0,
+    day_pnl: 0,
+    day_pct: 0,
+    return_total_pct: 0
+  },
+  holdings: [],
+  logs: [],
+  charts: { asset: [], latest: null }
+});
+
+const nowText = ref(shanghaiNowText());
+
+const chartPoints = computed(() => {
+  const points = Array.isArray(data.charts?.asset) ? [...data.charts.asset] : [];
+  if (data.charts?.latest?.date) points.push(data.charts.latest);
+  return points;
+});
+
+const publicHints = computed(() => {
+  return [
+    {
+      title: '数据口径',
+      text: '总资产 = 现金余额 + 持仓按当前价格估值。',
+      level: 'info'
+    },
+    {
+      title: '交易时效',
+      text: '交易日志存在刷新延迟，最终以管理端订单状态为准。',
+      level: 'risk'
+    },
+    {
+      title: '适用范围',
+      text: '本系统用于模拟交易与流程演示，不构成投资建议。',
+      level: 'ok'
+    }
+  ] as Array<{ title: string; text: string; level: 'info' | 'risk' | 'ok' }>;
+});
+
+const renderChart = () => {
+  if (!chartRef.value) return;
+  if (!chart) chart = echarts.init(chartRef.value);
+
+  const points = chartPoints.value;
+
+  chart.setOption({
+    grid: { top: 14, left: 48, right: 18, bottom: 30 },
+    xAxis: {
+      type: 'category',
+      data: points.map((x: any) => x.date),
+      boundaryGap: false,
+      axisLabel: { color: '#5a6f82', fontSize: 11 },
+      axisLine: { lineStyle: { color: '#b5c7d5' } }
+    },
+    yAxis: {
+      type: 'value',
+      axisLabel: {
+        color: '#5a6f82',
+        formatter: (v: number) => `¥${Math.round(v)}`
       },
-      holdings: [],
-      logs: [],
-      charts: { asset: [], latest: {} }
-  });
-  
-  const initChart = () => {
-      if (!chartRef.value) return;
-      const chart = echarts.init(chartRef.value);
-      
-      // 合并历史数据和最新实时点
-      const chartData = [...data.charts.asset];
-      if (data.charts.latest && data.charts.latest.value) {
-          chartData.push(data.charts.latest);
+      splitLine: { lineStyle: { color: '#dbe7f0' } }
+    },
+    tooltip: {
+      trigger: 'axis',
+      backgroundColor: 'rgba(16,29,41,0.95)',
+      borderWidth: 0,
+      textStyle: { color: '#fff' },
+      formatter: (params: any) => {
+        const p = params[0];
+        return `${p.axisValue}<br/>资产: ¥${formatMoney(p.data)}`;
       }
-  
-      chart.setOption({
-          backgroundColor: 'transparent',
-          grid: { 
-              top: 15, 
-              bottom: 20, 
-              left: 40, 
-              right: 20 
-          },
-          xAxis: { 
-              type: 'category', 
-              data: chartData.map(i => i.date), 
-              axisLine: { 
-                  show: true,
-                  lineStyle: { 
-                      color: '#d1d5db',
-                      width: 1
-                  }
-              },
-              axisTick: { 
-                  show: true,
-                  alignWithLabel: true,
-                  length: 3,
-                  lineStyle: { 
-                      color: '#d1d5db'
-                  }
-              },
-              axisLabel: { 
-                  color: '#6b7280',
-                  fontSize: 10,
-                  fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace',
-                  margin: 6
-              },
-              splitLine: {
-                  show: false
-              }
-          },
-          yAxis: { 
-              type: 'value', 
-              min: 'dataMin',
-              axisLine: { 
-                  show: false
-              },
-              axisTick: { 
-                  show: false
-              },
-              splitLine: { 
-                  lineStyle: { 
-                      color: '#f3f4f6',
-                      type: 'solid',
-                      width: 1
-                  }
-              },
-              axisLabel: { 
-                  color: '#6b7280',
-                  fontSize: 10,
-                  fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace',
-                  formatter: (value: number) => {
-                      if (value >= 10000) {
-                          return '¥' + (value / 10000).toFixed(0) + '万';
-                      }
-                      return '¥' + value;
-                  }
-              }
-          },
-          tooltip: {
-              trigger: 'axis',
-              backgroundColor: 'rgba(17, 24, 39, 0.95)',
-              borderColor: 'rgba(255,255,255,0.1)',
-              borderRadius: 6,
-              borderWidth: 1,
-              padding: [10, 12],
-              textStyle: { 
-                  color: '#fff', 
-                  fontSize: 11,
-                  fontFamily: 'system-ui, -apple-system, sans-serif',
-                  fontWeight: 'normal'
-              },
-              axisPointer: {
-                  type: 'line',
-                  lineStyle: {
-                      color: '#2563eb',
-                      width: 1,
-                      type: 'solid'
-                  }
-              },
-              formatter: (params: any) => {
-                const date = params[0].name;
-                const value = params[0].value;
-                const change = params[0].dataIndex > 0 ? 
-                  ((value - chartData[params[0].dataIndex - 1].value) / chartData[params[0].dataIndex - 1].value * 100).toFixed(2) : 0;
-                
-                return `
-                  <div style="margin-bottom: 4px; color: #9ca3af; font-size: 10px; font-family: ui-monospace;">${date}</div>
-                  <div style="display: flex; align-items: baseline; gap: 6px;">
-                    <div style="font-size: 16px; font-weight: 600; color: #ffffff; font-family: ui-monospace;">¥${formatMoney(value)}</div>
-                    ${params[0].dataIndex > 0 ? `
-                      <div style="font-size: 11px; font-weight: 500; color: ${change >= 0 ? '#10b981' : '#ef4444'};">
-                        ${change >= 0 ? '+' : ''}${change}%
-                      </div>
-                    ` : ''}
-                  </div>
-                `;
-              }
-          },
-          series: [{
-              data: chartData.map(i => i.value),
-              type: 'line',
-              smooth: 0.2,
-              symbol: 'circle',
-              symbolSize: 4,
-              showSymbol: chartData.length <= 15,
-              itemStyle: { 
-                  color: '#2563eb',
-                  borderColor: '#ffffff',
-                  borderWidth: 1.5
-              },
-              lineStyle: { 
-                  width: 2, 
-                  color: '#2563eb'
-              },
-              areaStyle: {
-                  color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
-                      { offset: 0, color: 'rgba(37, 99, 235, 0.1)' },
-                      { offset: 0.5, color: 'rgba(37, 99, 235, 0.05)' },
-                      { offset: 1, color: 'rgba(37, 99, 235, 0.01)' }
-                  ])
-              }
-          }]
-      });
-  
-      window.addEventListener('resize', () => chart.resize());
-  };
-  
-  onMounted(async () => {
-      try {
-          const res: any = await api.getPublicOverview();
-          Object.assign(data, res);
-          
-          await nextTick();
-          initChart();
-      } catch (e) {
-          console.error("Fetch Error:", e);
+    },
+    series: [
+      {
+        type: 'line',
+        smooth: 0.24,
+        data: points.map((x: any) => x.value),
+        symbol: 'circle',
+        symbolSize: 6,
+        lineStyle: { width: 2.3, color: '#2098d2' },
+        itemStyle: { color: '#10a37b' },
+        areaStyle: {
+          color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
+            { offset: 0, color: 'rgba(32,152,210,0.29)' },
+            { offset: 1, color: 'rgba(16,163,123,0.03)' }
+          ])
+        }
       }
+    ]
   });
-  </script>
-  
-  <style scoped>
-  /* 导入思源黑体 */
-  @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@300;400;500;600;700&display=swap');
-  
-  /* 应用思源黑体作为主字体 */
-  :global(*) {
-    font-family: 'Noto Sans SC', system-ui, -apple-system, sans-serif;
-  }
-  
-  /* 等宽字体 */
-  .font-mono {
-    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-  }
-  
-  /* 涨跌颜色 */
-  :deep(.text-red-700) { 
-    color: #dc2626 !important; 
-  }
-  
-  :deep(.text-green-700) { 
-    color: #059669 !important; 
-  }
-  
-  /* 移动端优化 */
-  @media (max-width: 640px) {
-    .text-2xl {
-      font-size: 1.5rem;
-      line-height: 2rem;
-    }
-    
-    .text-lg {
-      font-size: 1.125rem;
-      line-height: 1.75rem;
-    }
-    
-    .text-base {
-      font-size: 1rem;
-      line-height: 1.5rem;
-    }
-    
-    .text-sm {
-      font-size: 0.875rem;
-      line-height: 1.25rem;
-    }
-    
-    .text-xs {
-      font-size: 0.75rem;
-      line-height: 1rem;
-    }
-    
-    .text-\[11px\] {
-      font-size: 0.6875rem;
-      line-height: 0.875rem;
-    }
-    
-    .text-\[10px\] {
-      font-size: 0.625rem;
-      line-height: 0.75rem;
-    }
-  }
-  
-  /* 隐藏滚动条 */
-  ::-webkit-scrollbar {
-    display: none;
-  }
-  
-  /* 去除所有hover放大效果 */
-  * {
-    -webkit-tap-highlight-color: transparent;
-  }
-  </style>
+};
+
+const loadOverview = async () => {
+  const res: any = await api.getPublicOverview();
+  Object.assign(data, res);
+  await nextTick();
+  renderChart();
+};
+
+let refreshTimer: ReturnType<typeof setInterval> | null = null;
+let clockTimer: ReturnType<typeof setInterval> | null = null;
+
+onMounted(async () => {
+  await loadOverview();
+
+  refreshTimer = setInterval(loadOverview, 15000);
+  clockTimer = setInterval(() => {
+    nowText.value = shanghaiNowText();
+  }, 1000);
+
+  window.addEventListener('resize', resizeChart);
+});
+
+const resizeChart = () => {
+  chart?.resize();
+};
+
+onUnmounted(() => {
+  if (refreshTimer) clearInterval(refreshTimer);
+  if (clockTimer) clearInterval(clockTimer);
+  window.removeEventListener('resize', resizeChart);
+  chart?.dispose();
+  chart = null;
+});
+</script>

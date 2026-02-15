@@ -4,4 +4,4 @@
 /node_modules
 /package-lock.json
 /setup.ps1
-/.wrangler
+/.wrangler/

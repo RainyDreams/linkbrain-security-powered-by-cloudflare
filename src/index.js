@@ -2,171 +2,360 @@
 import { signToken, verifyAuth, verifyPassword } from './auth.js';
 import { placeOrder, cancelOrder, matchOrders } from './trade.js';
 import { handleScheduled } from './cron.js';
-import { jsonResponse, errorResponse, Money, Time } from './utils.js';
+import { jsonResponse, errorResponse, Money, Time, TradeRules } from './utils.js';
 import { fetchStockPrice } from './market.js';
+import { ensureRuntimeSchema } from './db.js';
+
+const LOGIN_MAX_FAILURES = 5;
+const LOGIN_WINDOW_MS = 15 * 60 * 1000;
+const LOGIN_LOCK_MS = 30 * 60 * 1000;
+
+const getClientIp = (request) => {
+    const cfIp = request.headers.get('CF-Connecting-IP');
+    if (cfIp) return cfIp;
+    const forwarded = request.headers.get('X-Forwarded-For');
+    if (forwarded) return forwarded.split(',')[0].trim();
+    return 'unknown';
+};
+
+const parseBody = async (request) => {
+    try {
+        return await request.json();
+    } catch {
+        return null;
+    }
+};
+
+const asTrimmed = (value) => (typeof value === 'string' ? value.trim() : '');
+
+const getLockState = async (env, ip) => {
+    const row = await env.DB.prepare('SELECT fail_count, first_fail_at, locked_until FROM login_attempts WHERE ip=?')
+        .bind(ip).first();
+    if (!row) return { locked: false };
+
+    const now = Date.now();
+    const lockedUntilTs = row.locked_until ? Date.parse(row.locked_until) : 0;
+    if (lockedUntilTs > now) {
+        return { locked: true, remainMs: lockedUntilTs - now };
+    }
+
+    return { locked: false, row };
+};
+
+const recordLoginFailure = async (env, ip) => {
+    const now = Date.now();
+    const nowIso = new Date(now).toISOString();
+    const row = await env.DB.prepare('SELECT fail_count, first_fail_at FROM login_attempts WHERE ip=?').bind(ip).first();
+
+    if (!row) {
+        await env.DB.prepare(
+            'INSERT INTO login_attempts (ip, fail_count, first_fail_at, locked_until, updated_at) VALUES (?, 1, ?, NULL, CURRENT_TIMESTAMP)'
+        ).bind(ip, nowIso).run();
+        return;
+    }
+
+    const firstTs = row.first_fail_at ? Date.parse(row.first_fail_at) : 0;
+    let failCount = row.fail_count;
+    let firstFailAt = row.first_fail_at || nowIso;
+
+    if (!firstTs || now - firstTs > LOGIN_WINDOW_MS) {
+        failCount = 1;
+        firstFailAt = nowIso;
+    } else {
+        failCount += 1;
+    }
+
+    let lockedUntil = null;
+    if (failCount >= LOGIN_MAX_FAILURES) {
+        lockedUntil = new Date(now + LOGIN_LOCK_MS).toISOString();
+        failCount = 0;
+        firstFailAt = nowIso;
+    }
+
+    await env.DB.prepare(
+        'UPDATE login_attempts SET fail_count=?, first_fail_at=?, locked_until=?, updated_at=CURRENT_TIMESTAMP WHERE ip=?'
+    ).bind(failCount, firstFailAt, lockedUntil, ip).run();
+};
+
+const clearLoginFailures = async (env, ip) => {
+    await env.DB.prepare('DELETE FROM login_attempts WHERE ip=?').bind(ip).run();
+};
+
+const normalizeTransferType = (type) => String(type || '').toUpperCase();
+
+const buildTransferResponse = (record) => ({
+    request_id: record.request_id,
+    type: record.type,
+    status: record.status,
+    amount: Money.toYuan(record.amount),
+    created_at: record.created_at,
+    processed_at: record.processed_at,
+    reason: record.reason || null
+});
+
+const handleTransfer = async (env, body) => {
+    if (!body || typeof body !== 'object') return errorResponse('参数错误', 400, 4100);
+
+    if (!Time.isBankTransferOpen()) {
+        return errorResponse('当前不在银证转账时段（工作日 09:00-16:00）', 400, 4101);
+    }
+
+    const type = normalizeTransferType(body.type);
+    if (type !== 'IN' && type !== 'OUT') return errorResponse('type 仅支持 IN/OUT', 400, 4102);
+
+    if (!Money.hasAtMostTwoDecimals(body.amount)) return errorResponse('amount 格式非法', 400, 4103);
+    const amountCent = Money.toCent(body.amount);
+    if (!Number.isInteger(amountCent) || amountCent <= 0) return errorResponse('金额必须大于0', 400, 4104);
+
+    if (amountCent > TradeRules.MAX_SINGLE_TRANSFER_CENT) {
+        return errorResponse(`单笔转账超过限制（${Money.toYuan(TradeRules.MAX_SINGLE_TRANSFER_CENT)}元）`, 400, 4105);
+    }
+
+    const cstDate = Time.formatCSTDate();
+    const daily = await env.DB.prepare(
+        "SELECT COALESCE(SUM(amount), 0) AS total FROM bank_transfers WHERE cst_date=? AND status='SUCCESS'"
+    ).bind(cstDate).first();
+    if ((daily.total || 0) + amountCent > TradeRules.MAX_DAILY_TRANSFER_CENT) {
+        return errorResponse(`当日累计转账超过限制（${Money.toYuan(TradeRules.MAX_DAILY_TRANSFER_CENT)}元）`, 400, 4106);
+    }
+
+    const requestIdInput = asTrimmed(body.request_id);
+    const requestId = requestIdInput || crypto.randomUUID();
+    if (requestId.length > 80) return errorResponse('request_id 过长', 400, 4107);
+
+    const existing = await env.DB.prepare('SELECT * FROM bank_transfers WHERE request_id=?').bind(requestId).first();
+    if (existing) return jsonResponse(buildTransferResponse(existing));
+
+    try {
+        await env.DB.prepare(
+            'INSERT INTO bank_transfers (request_id, type, amount, cst_date, status) VALUES (?, ?, ?, ?, ?)'
+        ).bind(requestId, type, amountCent, cstDate, 'PROCESSING').run();
+    } catch {
+        const conflict = await env.DB.prepare('SELECT * FROM bank_transfers WHERE request_id=?').bind(requestId).first();
+        if (conflict) return jsonResponse(buildTransferResponse(conflict));
+        return errorResponse('转账请求创建失败', 500, 5101);
+    }
+
+    try {
+        if (type === 'IN') {
+            const inRes = await env.DB.prepare('UPDATE account SET balance = balance + ? WHERE id = 1')
+                .bind(amountCent).run();
+            if ((inRes?.meta?.changes || 0) === 0) throw new Error('account update failed');
+        } else {
+            const outRes = await env.DB.prepare(
+                'UPDATE account SET balance = balance - ? WHERE id = 1 AND (balance - frozen_balance) >= ?'
+            ).bind(amountCent, amountCent).run();
+            if ((outRes?.meta?.changes || 0) === 0) {
+                await env.DB.prepare(
+                    "UPDATE bank_transfers SET status='FAILED', reason='可用余额不足', processed_at=CURRENT_TIMESTAMP WHERE request_id=?"
+                ).bind(requestId).run();
+                return errorResponse('可用余额不足', 400, 4001);
+            }
+        }
+
+        await env.DB.prepare(
+            "UPDATE bank_transfers SET status='SUCCESS', processed_at=CURRENT_TIMESTAMP WHERE request_id=?"
+        ).bind(requestId).run();
+    } catch (e) {
+        await env.DB.prepare(
+            "UPDATE bank_transfers SET status='FAILED', reason=?, processed_at=CURRENT_TIMESTAMP WHERE request_id=?"
+        ).bind(String(e?.message || 'transfer failed').slice(0, 120), requestId).run();
+        return errorResponse('转账失败，请稍后重试', 500, 5100);
+    }
+
+    const done = await env.DB.prepare('SELECT * FROM bank_transfers WHERE request_id=?').bind(requestId).first();
+    return jsonResponse(buildTransferResponse(done));
+};
 
 export default {
     async fetch(request, env, ctx) {
         const url = new URL(request.url);
         const method = request.method;
-        
-        // CORS
-        if (method === "OPTIONS") {
-            return new Response(null, { headers: { "Access-Control-Allow-Origin": "*", "Access-Control-Allow-Headers": "*" } });
+
+        if (method === 'OPTIONS') {
+            return new Response(null, {
+                headers: {
+                    'Access-Control-Allow-Origin': '*',
+                    'Access-Control-Allow-Headers': '*',
+                    'Access-Control-Allow-Methods': 'GET, POST, OPTIONS'
+                }
+            });
         }
 
         try {
+            await ensureRuntimeSchema(env);
 
-if (url.pathname === '/api/public/overview' && method === 'GET') {
-    const account = await env.DB.prepare("SELECT * FROM account WHERE id=1").first();
-    const { results: holdings } = await env.DB.prepare("SELECT * FROM holdings WHERE quantity > 0").all();
-    const { results: logs } = await env.DB.prepare("SELECT * FROM trades ORDER BY id DESC LIMIT 10").all();
-    const { results: snaps } = await env.DB.prepare("SELECT * FROM snapshots ORDER BY date ASC").all();
+            if (url.pathname === '/api/public/overview') {
+                if (method !== 'GET') return errorResponse('Method Not Allowed', 405, 4050);
 
-    let marketCap = 0;
-    let totalCost = 0;
-    const holdingList = [];
+                const account = await env.DB.prepare('SELECT * FROM account WHERE id=1').first();
+                const { results: holdings } = await env.DB.prepare('SELECT * FROM holdings WHERE quantity > 0').all();
+                const { results: logs } = await env.DB.prepare('SELECT * FROM trades ORDER BY id DESC LIMIT 10').all();
+                const { results: snaps } = await env.DB.prepare('SELECT * FROM snapshots ORDER BY date ASC').all();
 
-    await Promise.all(holdings.map(async (h) => {
-        const m = await fetchStockPrice(h.symbol);
-        const curPriceCent = m ? Money.toCent(m.price) : h.avg_cost;
-        const valCent = curPriceCent * h.quantity;
-        marketCap += valCent;
-        totalCost += h.total_cost;
+                let marketCap = 0;
+                let totalCost = 0;
+                const holdingList = [];
 
-        holdingList.push({
-            name: h.name,
-            code: h.symbol,
-            quantity: h.quantity,
-            cost: Money.toYuan(h.avg_cost),
-            price: Money.toYuan(curPriceCent),
-            pnl_val: Money.toYuan(valCent - h.total_cost),
-            pnl_rate: h.avg_cost > 0 ? parseFloat(((curPriceCent - h.avg_cost) / h.avg_cost * 100).toFixed(2)) : 0,
-            val_cent: valCent
-        });
-    }));
+                await Promise.all(holdings.map(async (h) => {
+                    const m = await fetchStockPrice(h.symbol);
+                    const curPriceCent = m ? Money.toCent(m.price) : h.avg_cost;
+                    const valCent = curPriceCent * h.quantity;
+                    marketCap += valCent;
+                    totalCost += h.total_cost;
 
-    // --- 核心修复 1: 总资产计算公式 ---
-    // account.balance 已经是总现金(含冻结)，所以不要再加 frozen_balance
-    const totalAssetsCent = account.balance + marketCap; 
-    const totalAssetsYuan = Money.toYuan(totalAssetsCent);
+                    holdingList.push({
+                        name: h.name,
+                        code: h.symbol,
+                        quantity: h.quantity,
+                        cost: Money.toYuan(h.avg_cost),
+                        price: Money.toYuan(curPriceCent),
+                        pnl_val: Money.toYuan(valCent - h.total_cost),
+                        pnl_rate: h.avg_cost > 0 ? parseFloat((((curPriceCent - h.avg_cost) / h.avg_cost) * 100).toFixed(2)) : 0,
+                        val_cent: valCent
+                    });
+                }));
 
-    holdingList.forEach(h => {
-        h.position_rate = totalAssetsCent > 0 ? parseFloat(((h.val_cent / totalAssetsCent) * 100).toFixed(2)) : 0;
-        delete h.val_cent;
-    });
+                const totalAssetsCent = account.balance + marketCap;
+                const totalAssetsYuan = Money.toYuan(totalAssetsCent);
 
-    // --- 核心修复 2: 当日盈亏基准 ---
-    const todayStr = new Date(new Date().getTime() + 8 * 3600000).toISOString().split('T')[0];
-    // 寻找最近的一个非今天的快照作为对比基准
-    const lastSnap = snaps.filter(s => s.date !== todayStr).pop() || { total_assets: account.initial_capital };
-    const dayPnlCent = totalAssetsCent - lastSnap.total_assets;
+                holdingList.forEach((h) => {
+                    h.position_rate = totalAssetsCent > 0
+                        ? parseFloat(((h.val_cent / totalAssetsCent) * 100).toFixed(2))
+                        : 0;
+                    delete h.val_cent;
+                });
 
-    // --- 核心修复 3: 图表去重逻辑 ---
-    // 如果 snaps 里已经有今天了，就不把今天的放在 asset 列表里，统一由 latest 处理
-    const historicalAssets = snaps
-        .filter(s => s.date !== todayStr)
-        .map(s => ({ date: s.date, value: Money.toYuan(s.total_assets) }));
+                const todayStr = Time.formatCSTDate();
+                const lastSnap = snaps.filter((s) => s.date !== todayStr).pop() || { total_assets: account.initial_capital };
+                const dayPnlCent = totalAssetsCent - lastSnap.total_assets;
+                const historicalAssets = snaps
+                    .filter((s) => s.date !== todayStr)
+                    .map((s) => ({ date: s.date, value: Money.toYuan(s.total_assets) }));
 
-    return jsonResponse({
-        assets: {
-            total: totalAssetsYuan,
-            market_cap: Money.toYuan(marketCap),
-            balance: Money.toYuan(account.balance - account.frozen_balance), // 访客看到的"余额"应该是"可用余额"
-            frozen: Money.toYuan(account.frozen_balance),
-            pnl_holding: Money.toYuan(marketCap - totalCost),
-            day_pnl: Money.toYuan(dayPnlCent),
-            day_pct: parseFloat(((dayPnlCent / lastSnap.total_assets) * 100).toFixed(2)),
-            return_total_pct: parseFloat(((totalAssetsCent - account.initial_capital) / account.initial_capital * 100).toFixed(2)),
-            max_drawdown: 0 // 简化处理
-        },
-        holdings: holdingList.sort((a, b) => b.position_rate - a.position_rate),
-        // src/index.js -> /api/public/overview 内部的 logs.map 部分
+                return jsonResponse({
+                    assets: {
+                        total: totalAssetsYuan,
+                        market_cap: Money.toYuan(marketCap),
+                        balance: Money.toYuan(account.balance - account.frozen_balance),
+                        frozen: Money.toYuan(account.frozen_balance),
+                        pnl_holding: Money.toYuan(marketCap - totalCost),
+                        day_pnl: Money.toYuan(dayPnlCent),
+                        day_pct: lastSnap.total_assets > 0
+                            ? parseFloat(((dayPnlCent / lastSnap.total_assets) * 100).toFixed(2))
+                            : 0,
+                        return_total_pct: account.initial_capital > 0
+                            ? parseFloat((((totalAssetsCent - account.initial_capital) / account.initial_capital) * 100).toFixed(2))
+                            : 0,
+                        max_drawdown: 0
+                    },
+                    holdings: holdingList.sort((a, b) => b.position_rate - a.position_rate),
+                    logs: logs.map((l) => {
+                        const pre = (l.pre_pos_ratio || 0).toFixed(2);
+                        const post = (l.post_pos_ratio || 0).toFixed(2);
+                        const action = l.side === 'BUY' ? '加仓' : '减仓';
+                        const tradeTime = typeof l.trade_time === 'string' ? l.trade_time : '';
+                        const hhmm = tradeTime.includes(' ') ? tradeTime.split(' ')[1].substring(0, 5) : '--:--';
 
-logs: logs.map(l => {
-    // 强制容错：如果是 null 或 undefined，显示 0.00
-    const pre = (l.pre_pos_ratio || 0).toFixed(2);
-    const post = (l.post_pos_ratio || 0).toFixed(2);
-    
-    const action = l.side === 'BUY' ? '加仓' : '减仓';
+                        return {
+                            text: `${l.name} ${l.symbol} ${pre}% -> ${post}%`,
+                            detail: `${action}价格: ${Money.toYuan(l.price)} | ${hhmm}`,
+                            side: l.side,
+                            time: l.trade_time
+                        };
+                    }),
+                    charts: {
+                        asset: historicalAssets,
+                        latest: { date: todayStr, value: totalAssetsYuan }
+                    }
+                });
+            }
 
-    return {
-        text: `${l.name} ${l.symbol} ${pre}% -> ${post}%`,
-        detail: `${action}价格: ${Money.toYuan(l.price)} | ${l.trade_time.split(' ')[1].substring(0, 5)}`,
-        side: l.side,
-        time: l.trade_time
-    };
-}),
-        charts: {
-            asset: historicalAssets,
-            latest: { date: todayStr, value: totalAssetsYuan }
-        }
-    });
-}
-
-            // === Public: Comments ===
             if (url.pathname === '/api/public/comments') {
                 if (method === 'GET') {
-                    const { results } = await env.DB.prepare("SELECT * FROM comments ORDER BY id DESC LIMIT 50").all();
+                    const { results } = await env.DB.prepare('SELECT * FROM comments ORDER BY id DESC LIMIT 50').all();
                     return jsonResponse(results);
                 }
                 if (method === 'POST') {
-                    const body = await request.json();
-                    await env.DB.prepare("INSERT INTO comments (nickname, content) VALUES (?, ?)").bind(body.nickname || 'Guest', body.content).run();
+                    const body = await parseBody(request);
+                    if (!body) return errorResponse('请求体非法', 400, 4200);
+
+                    const nickname = asTrimmed(body.nickname) || 'Guest';
+                    const content = asTrimmed(body.content);
+                    if (!content) return errorResponse('评论内容不能为空', 400, 4201);
+                    if (nickname.length > 20) return errorResponse('昵称长度不能超过20', 400, 4202);
+                    if (content.length > 500) return errorResponse('评论长度不能超过500', 400, 4203);
+
+                    await env.DB.prepare('INSERT INTO comments (nickname, content) VALUES (?, ?)')
+                        .bind(nickname, content).run();
                     return jsonResponse({ msg: 'ok' });
                 }
+                return errorResponse('Method Not Allowed', 405, 4050);
             }
 
-            // === Auth ===
-            if (url.pathname === '/api/auth/login' && method === 'POST') {
-                const { password } = await request.json();
+            if (url.pathname === '/api/auth/login') {
+                if (method !== 'POST') return errorResponse('Method Not Allowed', 405, 4050);
+
+                const ip = getClientIp(request);
+                const lock = await getLockState(env, ip);
+                if (lock.locked) {
+                    const minutes = Math.max(1, Math.ceil(lock.remainMs / 60000));
+                    return errorResponse(`登录失败次数过多，请 ${minutes} 分钟后重试`, 429, 4291);
+                }
+
+                const body = await parseBody(request);
+                const password = body?.password;
+                if (typeof password !== 'string' || !password) {
+                    await recordLoginFailure(env, ip);
+                    return errorResponse('用户名或密码错误', 401, 4011);
+                }
+
                 if (await verifyPassword(password, env)) {
+                    await clearLoginFailures(env, ip);
                     return jsonResponse({ token: signToken(env) });
                 }
-                return errorResponse("Password Error", 401);
+
+                await recordLoginFailure(env, ip);
+                return errorResponse('用户名或密码错误', 401, 4011);
             }
 
-            // === Admin ===
             if (url.pathname.startsWith('/api/admin/')) {
-                if (!verifyAuth(request, env)) return errorResponse("Unauthorized", 401);
+                if (!verifyAuth(request, env)) return errorResponse('Unauthorized', 401, 4010);
 
-                // src/index.js 里的 /api/admin/dashboard 逻辑
+                if (url.pathname === '/api/admin/dashboard') {
+                    if (method !== 'GET') return errorResponse('Method Not Allowed', 405, 4050);
 
-// src/index.js -> /api/admin/dashboard 完整替换
+                    const acc = await env.DB.prepare('SELECT * FROM account WHERE id=1').first();
+                    const { results: holds } = await env.DB.prepare('SELECT * FROM holdings').all();
 
-if (url.pathname === '/api/admin/dashboard' && method === 'GET') {
-    const acc = await env.DB.prepare("SELECT * FROM account WHERE id=1").first();
-    const { results: holds } = await env.DB.prepare("SELECT * FROM holdings").all();
-    
-    let marketCap = 0;
-    for (const h of holds) {
-        const m = await fetchStockPrice(h.symbol);
-        const priceCent = m ? Money.toCent(m.price) : h.avg_cost;
-        marketCap += priceCent * h.quantity;
-    }
+                    let marketCap = 0;
+                    for (const h of holds) {
+                        const m = await fetchStockPrice(h.symbol);
+                        const priceCent = m ? Money.toCent(m.price) : h.avg_cost;
+                        marketCap += priceCent * h.quantity;
+                    }
 
-    const availableCent = acc.balance - acc.frozen_balance;
+                    const availableCent = acc.balance - acc.frozen_balance;
 
-    return jsonResponse({
-        // 总资产 = 总现金 + 市值
-        total: Money.toYuan(acc.balance + marketCap),
-        market_cap: Money.toYuan(marketCap),
-        // 给管理员看明确的“可用”和“冻结”
-        available: Money.toYuan(availableCent),
-        frozen: Money.toYuan(acc.frozen_balance),
-        withdrawable: Money.toYuan(availableCent)
-    });
-}
+                    return jsonResponse({
+                        total: Money.toYuan(acc.balance + marketCap),
+                        market_cap: Money.toYuan(marketCap),
+                        available: Money.toYuan(availableCent),
+                        frozen: Money.toYuan(acc.frozen_balance),
+                        withdrawable: Money.toYuan(availableCent)
+                    });
+                }
 
                 if (url.pathname === '/api/admin/orders') {
-                    // 合并 PENDING 和 今日的已成交/已撤销
+                    if (method !== 'GET') return errorResponse('Method Not Allowed', 405, 4050);
+
                     const { results } = await env.DB.prepare(`
-                        SELECT * FROM orders 
-                        WHERE status = 'PENDING' 
-                        OR created_at >= date('now', 'localtime')
+                        SELECT * FROM orders
+                        WHERE status = 'PENDING'
+                           OR created_at >= date('now', 'localtime')
                         ORDER BY id DESC
                     `).all();
-                    return jsonResponse(results.map(o => ({
+                    return jsonResponse(results.map((o) => ({
                         ...o,
                         price: Money.toYuan(o.price),
                         time: o.created_at.substring(11, 19)
@@ -174,69 +363,62 @@ if (url.pathname === '/api/admin/dashboard' && method === 'GET') {
                 }
 
                 if (url.pathname === '/api/admin/trade') {
-                    const res = await placeOrder(env, await request.json());
-                    // 尝试触发撮合(非阻塞)
+                    if (method !== 'POST') return errorResponse('Method Not Allowed', 405, 4050);
+                    const body = await parseBody(request);
+                    if (!body) return errorResponse('请求体非法', 400, 4300);
+
+                    const res = await placeOrder(env, body);
                     ctx.waitUntil(matchOrders(env));
                     return res;
                 }
 
                 if (url.pathname === '/api/admin/cancel') {
-                    const { order_id } = await request.json();
-                    return await cancelOrder(env, order_id);
-                }
-                
-                // src/index.js 里的 /api/admin/holdings 逻辑
+                    if (method !== 'POST') return errorResponse('Method Not Allowed', 405, 4050);
+                    const body = await parseBody(request);
+                    if (!body) return errorResponse('请求体非法', 400, 4300);
 
-if (url.pathname === '/api/admin/holdings' && method === 'GET') {
-    const { results } = await env.DB.prepare("SELECT * FROM holdings").all();
-    const list = [];
-    
-    for (const h of results) {
-        const m = await fetchStockPrice(h.symbol);
-        // 重要：后端在这里统一转为元，前端就不用再除以100了
-        const curPriceYuan = m ? parseFloat(m.price) : Money.toYuan(h.avg_cost);
-        
-        list.push({
-            symbol: h.symbol,
-            name: h.name,
-            quantity: h.quantity,
-            available_qty: h.available_qty,
-            avg_cost: Money.toYuan(h.avg_cost), // 转为元
-            current_price: curPriceYuan,        // 元
-            total_cost: Money.toYuan(h.total_cost) // 转为元
-        });
-    }
-    return jsonResponse(list);
-}
-                if (url.pathname === '/api/admin/transfer' && method === 'POST') {
-                    const { amount, type } = await request.json(); // amount 为元, type 为 'IN' 或 'OUT'
-                    const amountCent = Money.toCent(amount);
-                
-                    if (amountCent <= 0) return errorResponse("金额必须大于0");
-                
-                    if (type === 'IN') {
-                        // 入金：增加 balance
-                        await env.DB.prepare("UPDATE account SET balance = balance + ? WHERE id = 1").bind(amountCent).run();
-                        return jsonResponse({ message: `入金成功: ¥${amount}` });
-                    } else {
-                        // 出金：校验可用余额 (balance - frozen)
-                        const acc = await env.DB.prepare("SELECT (balance - frozen_balance) as available FROM account WHERE id = 1").first();
-                        if (acc.available < amountCent) return errorResponse("可用余额不足", 400, 4001);
-                        
-                        await env.DB.prepare("UPDATE account SET balance = balance - ? WHERE id = 1").bind(amountCent).run();
-                        return jsonResponse({ message: `出金成功: ¥${amount}` });
+                    return await cancelOrder(env, body.order_id);
+                }
+
+                if (url.pathname === '/api/admin/holdings') {
+                    if (method !== 'GET') return errorResponse('Method Not Allowed', 405, 4050);
+
+                    const { results } = await env.DB.prepare('SELECT * FROM holdings').all();
+                    const list = [];
+
+                    for (const h of results) {
+                        const m = await fetchStockPrice(h.symbol);
+                        const curPriceYuan = m ? parseFloat(m.price) : Money.toYuan(h.avg_cost);
+
+                        list.push({
+                            symbol: h.symbol,
+                            name: h.name,
+                            quantity: h.quantity,
+                            available_qty: h.available_qty,
+                            avg_cost: Money.toYuan(h.avg_cost),
+                            current_price: curPriceYuan,
+                            total_cost: Money.toYuan(h.total_cost)
+                        });
                     }
+                    return jsonResponse(list);
+                }
+
+                if (url.pathname === '/api/admin/transfer') {
+                    if (method !== 'POST') return errorResponse('Method Not Allowed', 405, 4050);
+                    const body = await parseBody(request);
+                    return await handleTransfer(env, body);
                 }
             }
-            
 
-            return errorResponse("Not Found", 404);
+            return errorResponse('Not Found', 404, 4040);
         } catch (e) {
-            return errorResponse(e.message, 500, 5000, e.stack);
+            console.error('Unhandled Error', e);
+            return errorResponse('Internal Server Error', 500, 5000);
         }
     },
-    
+
     async scheduled(event, env, ctx) {
         ctx.waitUntil(handleScheduled(event, env));
     }
 };
+

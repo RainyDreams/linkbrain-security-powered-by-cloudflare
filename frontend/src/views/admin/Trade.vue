@@ -1,160 +1,246 @@
-<template>
-    <div class="space-y-4 p-4">
-      <!-- Balance Info -->
-      <div class="flex justify-between text-[11px] text-gray-500 px-1">
-        <div>可用: <span class="text-gray-900 font-mono font-medium">{{ formatMoney(availableAmount) }}</span></div>
-        <div v-if="!isBuy">持仓: <span class="text-gray-900 font-mono font-medium">{{ maxSellQty }}</span></div>
-      </div>
-  
-      <!-- Inputs -->
-      <div class="space-y-3">
-        <!-- Code -->
-        <div class="bg-white rounded-lg p-2 flex items-center border border-gray-300 focus-within:border-blue-500 focus-within:ring-1 focus-within:ring-blue-500">
-          <span class="w-10 text-center text-[11px] text-gray-600 font-medium">代码</span>
-          <input v-model="form.symbol" @input="onSymbolInput" maxlength="6" type="tel" 
-                 class="flex-1 bg-transparent outline-none text-sm font-mono px-2 text-gray-900 placeholder-gray-400"
-                 placeholder="600xxx">
-          <div v-if="preview.name" class="text-right ml-2">
-            <div class="text-xs font-medium text-gray-900 truncate max-w-[80px]">{{ preview.name }}</div>
-            <div class="text-xs font-mono" :class="preview.pct >=0 ? 'text-red-600' : 'text-green-600'">
-              {{ preview.price }}
+﻿<template>
+  <div class="grid gap-3 xl:grid-cols-[420px,1fr]">
+    <section class="space-y-3">
+      <article class="glass-card p-4 md:p-5">
+        <div class="mb-3 flex items-center justify-between">
+          <h2 class="panel-title">{{ isBuy ? '买入挂单' : '卖出挂单' }}</h2>
+          <span class="status-chip">{{ sessionText }}</span>
+        </div>
+
+        <div class="grid grid-cols-2 gap-2 text-xs text-slate-600">
+          <div class="rounded-xl border border-[var(--line)] bg-white/80 px-3 py-2">
+            <div>可用资金</div>
+            <div class="mt-1 font-mono text-sm font-semibold text-slate-800">¥{{ formatMoney(store.dashboard.available) }}</div>
+          </div>
+          <div class="rounded-xl border border-[var(--line)] bg-white/80 px-3 py-2">
+            <div>{{ isBuy ? '预计手续费' : '当前可卖' }}</div>
+            <div class="mt-1 font-mono text-sm font-semibold text-slate-800">
+              {{ isBuy ? `¥${formatMoney(estimatedFee)}` : `${formatQty(maxSellQty)} 股` }}
             </div>
           </div>
         </div>
-  
-        <!-- Price -->
-        <div class="flex gap-2">
-          <div class="flex-1 bg-white rounded-lg p-2 flex items-center border border-gray-300 focus-within:border-blue-500 focus-within:ring-1 focus-within:ring-blue-500">
-            <span class="w-10 text-center text-[11px] text-gray-600 font-medium">价格</span>
-            <input v-model.number="form.price" type="number" step="0.01"
-                   class="flex-1 bg-transparent outline-none text-sm font-mono px-2 text-gray-900 placeholder-gray-400"
-                   placeholder="0.00">
+
+        <div class="mt-4 space-y-3">
+          <label class="block">
+            <span class="kv-label">证券代码</span>
+            <input
+              v-model="form.symbol"
+              maxlength="6"
+              inputmode="numeric"
+              class="mt-1 w-full rounded-xl border border-[var(--line)] bg-white px-3 py-2 text-sm font-mono outline-none focus:border-cyan-500"
+              placeholder="例如 600519"
+            />
+          </label>
+
+          <div class="grid grid-cols-2 gap-2">
+            <label class="block">
+              <span class="kv-label">委托价格(元)</span>
+              <input
+                v-model.number="form.price"
+                type="number"
+                step="0.01"
+                class="mt-1 w-full rounded-xl border border-[var(--line)] bg-white px-3 py-2 text-sm font-mono outline-none focus:border-cyan-500"
+                placeholder="0.00"
+              />
+            </label>
+            <label class="block">
+              <span class="kv-label">委托数量(股)</span>
+              <input
+                v-model.number="form.qty"
+                type="number"
+                step="100"
+                class="mt-1 w-full rounded-xl border border-[var(--line)] bg-white px-3 py-2 text-sm font-mono outline-none focus:border-cyan-500"
+                placeholder="100"
+              />
+            </label>
           </div>
-        </div>
-  
-        <!-- Qty -->
-        <div class="bg-white rounded-lg p-2 flex items-center border border-gray-300 focus-within:border-blue-500 focus-within:ring-1 focus-within:ring-blue-500">
-          <span class="w-10 text-center text-[11px] text-gray-600 font-medium">数量</span>
-          <input v-model.number="form.qty" type="number"
-                 class="flex-1 bg-transparent outline-none text-sm font-mono px-2 text-gray-900 placeholder-gray-400"
-                 placeholder="0">
-        </div>
-        
-        <!-- Quick Ratios -->
-        <div class="grid grid-cols-4 gap-2">
-          <button v-for="r in [0.25, 0.33, 0.5, 1]" :key="r" @click="setQtyByRatio(r)"
-                  class="bg-gray-100 hover:bg-gray-200 active:bg-gray-300 py-2 rounded text-xs font-mono text-gray-700 transition-colors">
-            {{ r === 1 ? '全' : (r === 0.33 ? '1/3' : (r*100).toFixed(0)+'%') }}
+
+          <div class="grid grid-cols-4 gap-2 text-xs">
+            <button class="btn-solid btn-ghost" @click="setQtyByRatio(0.25)">25%</button>
+            <button class="btn-solid btn-ghost" @click="setQtyByRatio(0.5)">50%</button>
+            <button class="btn-solid btn-ghost" @click="setQtyByRatio(0.75)">75%</button>
+            <button class="btn-solid btn-ghost" @click="setQtyByRatio(1)">100%</button>
+          </div>
+
+          <div class="rounded-xl border border-[var(--line)] bg-slate-50 px-3 py-2 text-xs text-slate-600">
+            <div>标的名称: <span class="font-semibold text-slate-800">{{ matchedHolding?.name || '--' }}</span></div>
+            <div class="mt-1">预计委托金额: <span class="font-mono text-slate-800">¥{{ formatMoney(estimatedAmount) }}</span></div>
+          </div>
+
+          <button
+            class="btn-solid w-full"
+            :class="isBuy ? 'bg-[var(--pos)] text-white hover:brightness-110' : 'bg-[var(--neg)] text-white hover:brightness-110'"
+            :disabled="submitting"
+            @click="submit"
+          >
+            <span v-if="submitting" class="mr-2 inline-block h-4 w-4 animate-spin rounded-full border-2 border-white/40 border-t-white"></span>
+            {{ submitting ? '提交中...' : (isBuy ? '提交买入挂单' : '提交卖出挂单') }}
           </button>
         </div>
-      </div>
-  
-      <!-- Action Button -->
-      <button @click="submit" :disabled="loading"
-              class="w-full py-3 rounded-lg font-medium text-base text-white"
-              :class="isBuy ? 
-                'bg-red-600 hover:bg-red-700 active:bg-red-800' : 
-                'bg-green-600 hover:bg-green-700 active:bg-green-800'">
-        {{ isBuy ? '买 入' : '卖 出' }}
-      </button>
-  
-      <!-- Order List -->
-      <div class="pt-4 border-t border-gray-200">
-        <h3 class="text-sm font-semibold text-gray-900 mb-2">当日委托</h3>
-        <OrderList :orders="store.orders" @cancel="doCancel" />
-      </div>
-    </div>
-  </template>
-  
-  <script setup lang="ts">
-  import { ref, reactive, computed, watch, onMounted } from 'vue';
-  import { useRoute } from 'vue-router';
-  import { useMarketStore } from '../../stores/market';
-  import { fetchStockPrice } from '../../utils/quote';
-  import { formatMoney } from '../../utils/format';
-  import OrderList from '../../components/OrderList.vue';
-  import api from '../../api';
-  
-  const route = useRoute();
-  const store = useMarketStore();
-  const isBuy = computed(() => route.path.includes('buy'));
-  
-  const form = reactive({ symbol: '', price: '' as any, qty: '' as any });
-  const preview = reactive({ name: '', price: 0, pct: 0 });
-  const loading = ref(false);
-  
-  const availableAmount = computed(() => isBuy.value ? store.dashboard.available : 0);
-  const maxSellQty = computed(() => {
-      if(isBuy.value) return 0;
-      const h = store.holdings.find((x: any) => x.symbol === form.symbol);
-      return h ? h.available_qty : 0;
-  });
-  
-  onMounted(() => {
-      if (store.currentTradeSymbol) {
-          form.symbol = store.currentTradeSymbol;
-          onSymbolInput();
-          store.currentTradeSymbol = '';
-      }
-  });
-  
-  const onSymbolInput = async () => {
-      if (form.symbol.length === 6) {
-          const data = await fetchStockPrice(form.symbol);
-          if (data) {
-              preview.name = data.name;
-              preview.price = data.price;
-              preview.pct = 0;
-              if(!form.price) form.price = data.price;
-          }
-      }
-  };
-  
-  const setQtyByRatio = (r: number) => {
-      if (!form.price) return alert("请先输入价格");
-      if (isBuy.value) {
-          const cash = store.dashboard.available * r;
-          const rawQty = Math.floor(cash / (form.price * 1.0003) / 100) * 100;
-          form.qty = rawQty;
-      } else {
-          form.qty = Math.floor(maxSellQty.value * r);
-      }
-  };
-  
-  const submit = async () => {
-      if(!form.symbol || !form.price || !form.qty) return;
-      loading.value = true;
-      try {
-          await api.trade({
-              symbol: form.symbol,
-              side: isBuy.value ? 'BUY' : 'SELL',
-              price: Number(form.price),
-              qty: Number(form.qty)
-          });
-          form.qty = '';
-          store.fetchAdminData();
-      } catch(e) {
-          // Handled by interceptor
-      } finally {
-          loading.value = false;
-      }
-  };
-  
-  const doCancel = async (id: any) => {
-      if(confirm('撤销此单?')) {
-          await api.cancel(id);
-          store.fetchAdminData();
-      }
-  };
-  
-  watch(() => route.path, () => {
-      form.symbol = ''; form.price = ''; form.qty = '';
-      preview.name = '';
-  });
-  </script>
-  
-  <style scoped>
-  .font-mono {
-    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+      </article>
+
+      <InsightPanel title="交易风控提示" :items="insightItems" />
+    </section>
+
+    <section>
+      <OrderList :orders="store.orders" :can-cancel="true" @cancel="onCancel" />
+    </section>
+  </div>
+</template>
+
+<script setup lang="ts">
+import { computed, reactive, ref, watch } from 'vue';
+import { useRoute } from 'vue-router';
+import api from '../../api';
+import InsightPanel from '../../components/InsightPanel.vue';
+import OrderList from '../../components/OrderList.vue';
+import { useMarketStore } from '../../stores/market';
+import { formatMoney, formatQty, isTradingSession } from '../../utils/format';
+import { notifyError, notifyInfo, notifySuccess } from '../../utils/notify';
+
+const route = useRoute();
+const store = useMarketStore();
+
+const form = reactive({
+  symbol: '',
+  price: 0,
+  qty: 0
+});
+
+const submitting = ref(false);
+
+const isBuy = computed(() => route.path.includes('/buy'));
+const sessionText = computed(() => (isTradingSession() ? '交易时段（可撮合）' : '非交易时段（可挂单）'));
+
+const normalizeSymbol = (raw: string) => {
+  const code = raw.trim();
+  if (!/^\d{6}$/.test(code)) return code;
+  return code.startsWith('6') || code.startsWith('5') ? `sh${code}` : `sz${code}`;
+};
+
+const matchedHolding = computed(() => {
+  const key = normalizeSymbol(form.symbol);
+  return store.holdings.find((h: any) => h.symbol === key || h.symbol === form.symbol);
+});
+
+const maxSellQty = computed(() => Number(matchedHolding.value?.available_qty || 0));
+const estimatedAmount = computed(() => Number(form.price || 0) * Number(form.qty || 0));
+const estimatedFee = computed(() => Math.max(5, estimatedAmount.value * 0.00025));
+
+const alignedQty = (val: number) => {
+  const n = Math.floor(Number(val || 0));
+  return Math.max(0, Math.floor(n / 100) * 100);
+};
+
+const insightItems = computed(() => {
+  const items: Array<{ title: string; text: string; level: 'info' | 'risk' | 'ok' }> = [
+    {
+      title: '规则 1：整手委托',
+      text: '数量必须为 100 股整数倍，系统将拒绝零股提交。',
+      level: form.qty > 0 && form.qty % 100 === 0 ? 'ok' : 'risk'
+    },
+    {
+      title: '规则 2：资金与持仓检查',
+      text: isBuy.value
+        ? '买入时校验可用资金 + 手续费，避免透支下单。'
+        : '卖出时校验可卖持仓，遵守 T+1 可卖规则。',
+      level: 'info'
+    },
+    {
+      title: '规则 3：撮合时段',
+      text: isTradingSession() ? '当前时段提交后可立即参与撮合。' : '当前时段仅挂单，待开市后自动撮合。',
+      level: isTradingSession() ? 'ok' : 'info'
+    }
+  ];
+
+  if (form.symbol && !/^\d{6}$/.test(form.symbol)) {
+    items.unshift({
+      title: '代码格式提示',
+      text: '证券代码应为 6 位数字，例如 000001、600519。',
+      level: 'risk'
+    });
   }
-  </style>
+
+  return items;
+});
+
+const setQtyByRatio = (ratio: number) => {
+  if (isBuy.value) {
+    if (!form.price || form.price <= 0) {
+      notifyError('价格未填写', '无法计算可买数量。', '请先输入有效委托价格。');
+      return;
+    }
+    const budget = Number(store.dashboard.available || 0) * ratio;
+    const qty = alignedQty(budget / form.price);
+    form.qty = qty;
+    return;
+  }
+  form.qty = alignedQty(maxSellQty.value * ratio);
+};
+
+const validateForm = () => {
+  if (!/^\d{6}$/.test(form.symbol)) {
+    notifyError('代码格式不正确', '证券代码必须为 6 位数字。', '例如：600519。');
+    return false;
+  }
+  if (!form.price || form.price <= 0) {
+    notifyError('委托价格无效', '委托价格需大于 0。', '建议参考行情最新价输入。');
+    return false;
+  }
+  if (!Number.isInteger(form.qty) || form.qty <= 0 || form.qty % 100 !== 0) {
+    notifyError('委托数量不合规', '数量必须是 100 股整数倍。', '可使用 25%/50% 快捷按钮自动计算。');
+    return false;
+  }
+  if (!isBuy.value && form.qty > maxSellQty.value) {
+    notifyError('超出可卖数量', '卖出数量大于当前可卖持仓。', '请先减少数量或等待 T+1 解锁。');
+    return false;
+  }
+  return true;
+};
+
+const submit = async () => {
+  if (!validateForm()) return;
+
+  submitting.value = true;
+  try {
+    await api.trade({
+      symbol: form.symbol,
+      side: isBuy.value ? 'BUY' : 'SELL',
+      price: Number(form.price),
+      qty: Number(form.qty)
+    });
+
+    notifySuccess(
+      isBuy.value ? '买入挂单已提交' : '卖出挂单已提交',
+      isTradingSession() ? '订单正在参与撮合流程。' : '当前为非交易时段，订单已进入挂单队列。',
+      '可在“撤单中心”查看状态并执行撤单。'
+    );
+
+    form.qty = 0;
+    await store.fetchAdminData();
+  } finally {
+    submitting.value = false;
+  }
+};
+
+const onCancel = async (id: number) => {
+  if (!window.confirm('确认撤销该委托？')) return;
+  await api.cancel(id);
+  notifySuccess('撤单成功', '订单状态已更新。', '请关注资金与可卖持仓的回补结果。');
+  await store.fetchAdminData();
+};
+
+watch(
+  () => store.currentTradeSymbol,
+  (symbol) => {
+    if (!symbol) return;
+    const code = symbol.replace(/^(sh|sz)/, '');
+    form.symbol = code;
+    const h = store.holdings.find((x: any) => x.symbol === symbol);
+    if (h) form.price = Number(h.current_price || h.avg_cost || 0);
+    store.currentTradeSymbol = '';
+    notifyInfo('已载入标的', `当前标的 ${code} 已填入委托表单。`);
+  },
+  { immediate: true }
+);
+</script>

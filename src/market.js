@@ -2,6 +2,10 @@
  * 猜测股票前缀
  */
 const getFullSymbol = (code) => {
+  if (typeof code !== 'string') return '';
+  const normalized = code.trim().toLowerCase();
+  if (/^(sh|sz)\d{6}$/.test(normalized)) return normalized;
+  code = normalized;
   if (code.length !== 6) return code;
   // 6开头为上证，5开头为基金/ETF，通常归于上海
   if (code.startsWith('6') || code.startsWith('5')) return `sh${code}`;
@@ -35,7 +39,8 @@ const parseSinaData = (text) => {
   const data = match[1].split(',');
   if (data.length < 4) return null;
   const price = parseFloat(data[3]);
-  return price > 0 ? { name: data[0], price: price } : null;
+  const prevClose = parseFloat(data[2]);
+  return price > 0 ? { name: data[0], price, prevClose: prevClose > 0 ? prevClose : null } : null;
 };
 
 /**
@@ -46,10 +51,11 @@ const parseTencentData = (text) => {
   const match = text.match(/="([^"]+)"/);
   if (!match) return null;
   const data = match[1].split('~');
-  if (data.length < 4) return null;
+  if (data.length < 5) return null;
   // 腾讯接口索引1是名字，3是当前价
   const price = parseFloat(data[3]);
-  return price > 0 ? { name: data[1], price: price } : null;
+  const prevClose = parseFloat(data[4]);
+  return price > 0 ? { name: data[1], price, prevClose: prevClose > 0 ? prevClose : null } : null;
 };
 
 /**
@@ -58,6 +64,7 @@ const parseTencentData = (text) => {
 */
 export const fetchStockPrice = async (symbolOrCode) => {
   const symbol = getFullSymbol(symbolOrCode);
+  if (!symbol || !/^(sh|sz)\d{6}$/.test(symbol)) return null;
   
   // --- 尝试第一源：新浪 ---
   const sinaUrl = `https://hq.sinajs.cn/list=${symbol}`;

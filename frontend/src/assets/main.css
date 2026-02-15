@@ -1,32 +1,204 @@
+﻿@import url('https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;700&display=swap');
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
 :root {
-  --ths-red: #e02020;
-  --ths-green: #009040;
-  --ths-bg: #f4f5f7;
-  --ths-border: #dde2e6;
+  --bg-0: #ebf2f6;
+  --bg-1: #dbe8f0;
+  --ink-0: #102231;
+  --ink-1: #35566d;
+  --line: #bfd2df;
+  --card: #f7fbff;
+  --card-strong: #ffffff;
+
+  --tg-blue: #2498d4;
+  --tg-blue-2: #46afd9;
+  --openai-teal: #12a37b;
+
+  --pos: #dc3a56;
+  --neg: #089968;
+  --warn: #d48a1f;
+  --muted: #638096;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#app {
+  min-height: 100%;
 }
 
 body {
-  background-color: var(--ths-bg);
-  font-family: 'Inter', -apple-system, sans-serif;
-  color: #1a1a1a;
+  margin: 0;
+  color: var(--ink-0);
+  font-family: 'Manrope', 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', sans-serif;
+  background:
+    radial-gradient(circle at 12% -8%, rgba(36, 152, 212, 0.22), transparent 42%),
+    radial-gradient(circle at 85% 3%, rgba(18, 163, 123, 0.14), transparent 40%),
+    repeating-linear-gradient(90deg, rgba(188, 209, 224, 0.22) 0 1px, transparent 1px 44px),
+    linear-gradient(180deg, var(--bg-1) 0%, var(--bg-0) 24%, #edf3f7 100%);
   -webkit-font-smoothing: antialiased;
 }
 
-/* 金融数字专用 */
-/* .font-mono {
-  font-family: 'Roboto Mono', monospace !important;
-  letter-spacing: -0.5px;
-} */
+body::before {
+  content: '';
+  pointer-events: none;
+  position: fixed;
+  inset: 0;
+  background: linear-gradient(180deg, rgba(16, 34, 49, 0.04), transparent 22%);
+  z-index: -1;
+}
 
-/* 移除大圆角，改为冷静的微圆角 */
-.rounded-xl { border-radius: 4px !important; }
-.rounded-2xl, .rounded-3xl { border-radius: 6px !important; }
+.font-mono {
+  font-family: 'JetBrains Mono', 'SFMono-Regular', Menlo, Monaco, Consolas, monospace;
+}
 
-/* 紧凑型按钮 */
-.btn-pro {
-  @apply px-4 py-2 text-xs font-bold transition-all active:scale-95 flex items-center justify-center;
+.glass-card {
+  @apply rounded-2xl border shadow-sm;
+  border-color: var(--line);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.94) 0%, rgba(247, 251, 255, 0.9) 100%);
+  box-shadow:
+    0 8px 26px rgba(28, 64, 87, 0.08),
+    inset 0 1px 0 rgba(255, 255, 255, 0.6);
+}
+
+.panel-title {
+  @apply text-sm font-semibold tracking-wide;
+  color: var(--ink-0);
+}
+
+.kv-label {
+  @apply text-[11px] uppercase tracking-[0.16em];
+  color: var(--ink-1);
+}
+
+.kv-value {
+  @apply text-lg font-semibold font-mono;
+  color: var(--ink-0);
+}
+
+.btn-solid {
+  @apply inline-flex items-center justify-center rounded-xl px-4 py-2.5 text-sm font-semibold transition;
+}
+
+.btn-primary {
+  background: linear-gradient(125deg, var(--tg-blue) 0%, var(--tg-blue-2) 100%);
+  color: #fff;
+  box-shadow: 0 8px 20px rgba(36, 152, 212, 0.24);
+}
+
+.btn-primary:hover {
+  filter: brightness(1.06);
+}
+
+.btn-ghost {
+  @apply border;
+  border-color: var(--line);
+  color: var(--ink-1);
+  background: rgba(255, 255, 255, 0.78);
+}
+
+.btn-ghost:hover {
+  background: rgba(255, 255, 255, 1);
+  border-color: #a9c2d3;
+}
+
+.tag {
+  @apply rounded-full px-2.5 py-1 text-[11px] font-semibold tracking-wide;
+}
+
+.tag-pos {
+  color: var(--pos);
+  background: rgba(220, 58, 86, 0.14);
+}
+
+.tag-neg {
+  color: var(--neg);
+  background: rgba(8, 153, 104, 0.15);
+}
+
+.tag-neutral {
+  color: var(--muted);
+  background: rgba(115, 141, 159, 0.16);
+}
+
+.tag-warning {
+  color: #9a6100;
+  background: rgba(212, 138, 31, 0.16);
+}
+
+.status-chip {
+  @apply inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[11px] font-semibold;
+  background: rgba(99, 128, 150, 0.14);
+  color: #4f6980;
+}
+
+.status-chip::before {
+  content: '';
+  width: 6px;
+  height: 6px;
+  border-radius: 999px;
+  background: currentColor;
+}
+
+.prompt-card {
+  @apply rounded-xl border p-3;
+  border-color: #c4d7e4;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.9) 0%, rgba(246, 252, 255, 0.92) 100%);
+}
+
+.prompt-title {
+  @apply text-[12px] font-semibold tracking-wide;
+  color: #264459;
+}
+
+.prompt-body {
+  @apply mt-1 text-xs leading-5;
+  color: #4d667c;
+}
+
+.data-table-head {
+  @apply bg-slate-100/70 text-xs uppercase tracking-wide text-slate-600;
+}
+
+.scrollbar-thin {
+  scrollbar-width: thin;
+  scrollbar-color: #aac2d4 transparent;
+}
+
+.scrollbar-thin::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+.scrollbar-thin::-webkit-scrollbar-thumb {
+  border-radius: 999px;
+  background: #aac2d4;
+}
+
+.fade-rise {
+  animation: fade-rise 0.35s ease both;
+}
+
+@keyframes fade-rise {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@media (max-width: 768px) {
+  .glass-card {
+    @apply rounded-xl;
+  }
 }

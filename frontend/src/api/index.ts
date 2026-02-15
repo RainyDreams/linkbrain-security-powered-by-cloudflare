@@ -1,39 +1,61 @@
-import axios from 'axios';
+﻿import axios from 'axios';
+import { resolveErrorGuide } from '../utils/errorGuide';
+import { notifyError } from '../utils/notify';
+
+interface ApiEnvelope<T = any> {
+    code: number;
+    msg: string;
+    data: T;
+}
+
+export interface ApiError {
+    code: number;
+    msg: string;
+}
+
+const toApiError = (code: number, msg: string): ApiError => ({ code, msg });
 
 const api = axios.create({
     baseURL: '/api',
-    timeout: 10000
+    timeout: 15000
 });
 
-api.interceptors.request.use(config => {
+api.interceptors.request.use((config) => {
     const token = localStorage.getItem('token');
     if (token) config.headers.Authorization = `Bearer ${token}`;
     return config;
 });
 
 api.interceptors.response.use(
-    res => {
-        const { code, msg, data } = res.data;
-        if (code === 0) return data;
-        // 统一错误处理
-        if(code === 4001) alert("资金不足");
-        else if(code === 4002) alert("持仓不足(T+1限制)");
-        else alert(msg || '系统错误');
-        return Promise.reject(msg);
+    (res) => {
+        const payload: ApiEnvelope = res.data;
+        if (payload && payload.code === 0) return payload.data;
+
+        const code = payload?.code ?? 5000;
+        const msg = payload?.msg || '请求失败';
+        const guide = resolveErrorGuide(code, msg);
+        notifyError(guide.title, guide.message, guide.hint, code);
+        return Promise.reject(toApiError(code, msg));
     },
-    err => Promise.reject(err)
+    (err) => {
+        const code = err?.response?.data?.code || err?.response?.status || 5000;
+        const msg = err?.response?.data?.msg || err?.message || '网络异常';
+        const guide = resolveErrorGuide(code, msg);
+        notifyError(guide.title, guide.message, guide.hint, code);
+        return Promise.reject(toApiError(code, msg));
+    }
 );
 
 export default {
     login: (password: string) => api.post('/auth/login', { password }),
     getPublicOverview: () => api.get('/public/overview'),
-    comment: (data: any) => api.post('/public/comment', data),
-    
-    // Admin
+    getComments: () => api.get('/public/comments'),
+    comment: (data: { nickname?: string; content: string }) => api.post('/public/comments', data),
+
     getDashboard: () => api.get('/admin/dashboard'),
-    trade: (data: {symbol: string, side: string, price: number, qty: number}) => api.post('/admin/trade', data),
+    trade: (data: { symbol: string; side: 'BUY' | 'SELL'; price: number; qty: number }) => api.post('/admin/trade', data),
     cancel: (order_id: number) => api.post('/admin/cancel', { order_id }),
     getOrders: () => api.get('/admin/orders'),
     getHoldings: () => api.get('/admin/holdings'),
-    transfer: (data: { amount: number, type: 'IN' | 'OUT' }) => api.post('/admin/transfer', data),
+    transfer: (data: { amount: number; type: 'IN' | 'OUT'; request_id?: string }) => api.post('/admin/transfer', data)
 };
