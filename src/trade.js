@@ -1,6 +1,7 @@
 // src/trade.js
 import { jsonResponse, errorResponse, Money, Time, TradeRules } from './utils.js';
 import { fetchStockPrice } from './market.js';
+import { withTransaction } from './db.js';
 
 const ORDER_SIDES = new Set(['BUY', 'SELL']);
 
@@ -182,127 +183,121 @@ async function executeTrade(env, order, exePrice) {
     ).bind(order.id).run();
     if (dbChanges(claimRes) === 0) return;
 
-    let settlementStarted = false;
-
     try {
-        const freshOrder = await env.DB.prepare(
-            "SELECT * FROM orders WHERE id=? AND status='MATCHING'"
-        ).bind(order.id).first();
-        if (!freshOrder) return;
+        await withTransaction(env, async () => {
+            const freshOrder = await env.DB.prepare(
+                "SELECT * FROM orders WHERE id=? AND status='MATCHING'"
+            ).bind(order.id).first();
+            if (!freshOrder) throw new Error('order not found in matching state');
 
-        const qty = Number(freshOrder.qty);
-        if (!isPositiveInteger(qty)) throw new Error('invalid matched qty');
+            const qty = Number(freshOrder.qty);
+            if (!isPositiveInteger(qty)) throw new Error('invalid matched qty');
 
-        const tradeAmt = exePrice * qty;
-        const fee = Money.calcCommission(tradeAmt);
-        const tax = freshOrder.side === 'SELL' ? Money.calcTax(tradeAmt) : 0;
-        const totalSettlement = freshOrder.side === 'BUY' ? (tradeAmt + fee) : (tradeAmt - fee - tax);
-        if (!Number.isInteger(totalSettlement)) throw new Error('invalid settlement');
+            const tradeAmt = exePrice * qty;
+            const fee = Money.calcCommission(tradeAmt);
+            const tax = freshOrder.side === 'SELL' ? Money.calcTax(tradeAmt) : 0;
+            const totalSettlement = freshOrder.side === 'BUY' ? (tradeAmt + fee) : (tradeAmt - fee - tax);
+            if (!Number.isInteger(totalSettlement)) throw new Error('invalid settlement');
 
-        const acc = await env.DB.prepare('SELECT balance FROM account WHERE id = 1').first();
-        const { results: allHoldings } = await env.DB.prepare(
-            'SELECT symbol, quantity, avg_cost FROM holdings'
-        ).all();
+            const acc = await env.DB.prepare('SELECT balance FROM account WHERE id = 1').first();
+            const { results: allHoldings } = await env.DB.prepare(
+                'SELECT symbol, quantity, avg_cost FROM holdings'
+            ).all();
 
-        let totalMarketCap = 0;
-        let targetOldQty = 0;
-        for (const h of allHoldings) {
-            if (h.symbol === freshOrder.symbol) targetOldQty = h.quantity;
-            totalMarketCap += h.quantity * (h.symbol === freshOrder.symbol ? exePrice : h.avg_cost);
-        }
-
-        const totalAssetsBefore = acc.balance + totalMarketCap;
-        const prePosRatio = totalAssetsBefore > 0
-            ? parseFloat(((targetOldQty * exePrice / totalAssetsBefore) * 100).toFixed(2))
-            : 0;
-        const newQty = freshOrder.side === 'BUY' ? (targetOldQty + qty) : (targetOldQty - qty);
-        const postPosRatio = totalAssetsBefore > 0
-            ? parseFloat(((Math.max(newQty, 0) * exePrice / totalAssetsBefore) * 100).toFixed(2))
-            : 0;
-
-        settlementStarted = true;
-        if (freshOrder.side === 'BUY') {
-            const payRes = await env.DB.prepare(
-                'UPDATE account SET balance = balance - ?, frozen_balance = frozen_balance - ? WHERE id = 1 AND balance >= ? AND frozen_balance >= ?'
-            ).bind(totalSettlement, freshOrder.freeze_amount, totalSettlement, freshOrder.freeze_amount).run();
-            if (dbChanges(payRes) === 0) throw new Error('account settlement failed for buy order');
-
-            const oldH = await env.DB.prepare(
-                'SELECT total_cost, quantity FROM holdings WHERE symbol = ?'
-            ).bind(freshOrder.symbol).first();
-
-            if (oldH) {
-                const nQty = oldH.quantity + qty;
-                const nCost = oldH.total_cost + totalSettlement;
-                const nAvg = Math.round(nCost / nQty);
-                const holdRes = await env.DB.prepare(
-                    'UPDATE holdings SET quantity=?, total_cost=?, avg_cost=?, updated_at=CURRENT_TIMESTAMP WHERE symbol=?'
-                ).bind(nQty, nCost, nAvg, freshOrder.symbol).run();
-                if (dbChanges(holdRes) === 0) throw new Error('holdings update failed for buy order');
-            } else {
-                await env.DB.prepare(
-                    'INSERT INTO holdings (symbol, name, quantity, available_qty, avg_cost, total_cost) VALUES (?, ?, ?, 0, ?, ?)'
-                ).bind(freshOrder.symbol, freshOrder.name, qty, Math.round(totalSettlement / qty), totalSettlement).run();
-            }
-        } else {
-            const hInfo = await env.DB.prepare(
-                'SELECT quantity, available_qty, avg_cost FROM holdings WHERE symbol = ?'
-            ).bind(freshOrder.symbol).first();
-            if (!hInfo || hInfo.quantity < qty) throw new Error('holdings settlement failed for sell order');
-
-            if (hInfo.quantity > qty) {
-                const nQty = hInfo.quantity - qty;
-                const nCost = Math.round(hInfo.avg_cost * nQty);
-                const nAvailable = Math.min(hInfo.available_qty, nQty);
-                const holdRes = await env.DB.prepare(
-                    'UPDATE holdings SET quantity = ?, available_qty = ?, total_cost = ?, updated_at = CURRENT_TIMESTAMP WHERE symbol = ?'
-                ).bind(nQty, nAvailable, nCost, freshOrder.symbol).run();
-                if (dbChanges(holdRes) === 0) throw new Error('holdings update failed for sell order');
-            } else {
-                const delRes = await env.DB.prepare(
-                    'DELETE FROM holdings WHERE symbol = ?'
-                ).bind(freshOrder.symbol).run();
-                if (dbChanges(delRes) === 0) throw new Error('holdings delete failed for sell order');
+            let totalMarketCap = 0;
+            let targetOldQty = 0;
+            for (const h of allHoldings) {
+                if (h.symbol === freshOrder.symbol) targetOldQty = h.quantity;
+                totalMarketCap += h.quantity * (h.symbol === freshOrder.symbol ? exePrice : h.avg_cost);
             }
 
-            const creditRes = await env.DB.prepare(
-                'UPDATE account SET balance = balance + ? WHERE id = 1'
-            ).bind(totalSettlement).run();
-            if (dbChanges(creditRes) === 0) throw new Error('account credit failed for sell order');
-        }
+            const totalAssetsBefore = acc.balance + totalMarketCap;
+            const prePosRatio = totalAssetsBefore > 0
+                ? parseFloat(((targetOldQty * exePrice / totalAssetsBefore) * 100).toFixed(2))
+                : 0;
+            const newQty = freshOrder.side === 'BUY' ? (targetOldQty + qty) : (targetOldQty - qty);
+            const postPosRatio = totalAssetsBefore > 0
+                ? parseFloat(((Math.max(newQty, 0) * exePrice / totalAssetsBefore) * 100).toFixed(2))
+                : 0;
 
-        await env.DB.prepare(`
-            INSERT INTO trades (order_id, symbol, name, side, price, qty, amount, commission, tax, pre_pos_ratio, post_pos_ratio)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        `).bind(
-            freshOrder.id,
-            freshOrder.symbol,
-            freshOrder.name,
-            freshOrder.side,
-            exePrice,
-            qty,
-            tradeAmt,
-            fee,
-            tax,
-            prePosRatio,
-            postPosRatio
-        ).run();
+            if (freshOrder.side === 'BUY') {
+                const payRes = await env.DB.prepare(
+                    'UPDATE account SET balance = balance - ?, frozen_balance = frozen_balance - ? WHERE id = 1 AND balance >= ? AND frozen_balance >= ?'
+                ).bind(totalSettlement, freshOrder.freeze_amount, totalSettlement, freshOrder.freeze_amount).run();
+                if (dbChanges(payRes) === 0) throw new Error('account settlement failed for buy order');
 
-        const fillRes = await env.DB.prepare(
-            "UPDATE orders SET status = 'FILLED', filled_qty = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ? AND status = 'MATCHING'"
-        ).bind(qty, freshOrder.id).run();
-        if (dbChanges(fillRes) === 0) throw new Error('order final status update failed');
+                const oldH = await env.DB.prepare(
+                    'SELECT total_cost, quantity FROM holdings WHERE symbol = ?'
+                ).bind(freshOrder.symbol).first();
+
+                if (oldH) {
+                    const nQty = oldH.quantity + qty;
+                    const nCost = oldH.total_cost + totalSettlement;
+                    const nAvg = Math.round(nCost / nQty);
+                    const holdRes = await env.DB.prepare(
+                        'UPDATE holdings SET quantity=?, total_cost=?, avg_cost=?, updated_at=CURRENT_TIMESTAMP WHERE symbol=?'
+                    ).bind(nQty, nCost, nAvg, freshOrder.symbol).run();
+                    if (dbChanges(holdRes) === 0) throw new Error('holdings update failed for buy order');
+                } else {
+                    await env.DB.prepare(
+                        'INSERT INTO holdings (symbol, name, quantity, available_qty, avg_cost, total_cost) VALUES (?, ?, ?, 0, ?, ?)'
+                    ).bind(freshOrder.symbol, freshOrder.name, qty, Math.round(totalSettlement / qty), totalSettlement).run();
+                }
+            } else {
+                const hInfo = await env.DB.prepare(
+                    'SELECT quantity, available_qty, avg_cost FROM holdings WHERE symbol = ?'
+                ).bind(freshOrder.symbol).first();
+                if (!hInfo || hInfo.quantity < qty) throw new Error('holdings settlement failed for sell order');
+
+                if (hInfo.quantity > qty) {
+                    const nQty = hInfo.quantity - qty;
+                    const nCost = Math.round(hInfo.avg_cost * nQty);
+                    const nAvailable = Math.min(hInfo.available_qty, nQty);
+                    const holdRes = await env.DB.prepare(
+                        'UPDATE holdings SET quantity = ?, available_qty = ?, total_cost = ?, updated_at = CURRENT_TIMESTAMP WHERE symbol = ?'
+                    ).bind(nQty, nAvailable, nCost, freshOrder.symbol).run();
+                    if (dbChanges(holdRes) === 0) throw new Error('holdings update failed for sell order');
+                } else {
+                    const delRes = await env.DB.prepare(
+                        'DELETE FROM holdings WHERE symbol = ?'
+                    ).bind(freshOrder.symbol).run();
+                    if (dbChanges(delRes) === 0) throw new Error('holdings delete failed for sell order');
+                }
+
+                const creditRes = await env.DB.prepare(
+                    'UPDATE account SET balance = balance + ? WHERE id = 1'
+                ).bind(totalSettlement).run();
+                if (dbChanges(creditRes) === 0) throw new Error('account credit failed for sell order');
+            }
+
+            const tradeRes = await env.DB.prepare(`
+                INSERT INTO trades (order_id, symbol, name, side, price, qty, amount, commission, tax, pre_pos_ratio, post_pos_ratio)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            `).bind(
+                freshOrder.id,
+                freshOrder.symbol,
+                freshOrder.name,
+                freshOrder.side,
+                exePrice,
+                qty,
+                tradeAmt,
+                fee,
+                tax,
+                prePosRatio,
+                postPosRatio
+            ).run();
+            if (dbChanges(tradeRes) === 0) throw new Error('trade insert failed');
+
+            const fillRes = await env.DB.prepare(
+                "UPDATE orders SET status = 'FILLED', filled_qty = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ? AND status = 'MATCHING'"
+            ).bind(qty, freshOrder.id).run();
+            if (dbChanges(fillRes) === 0) throw new Error('order final status update failed');
+        });
     } catch (e) {
         console.error('executeTrade error', order?.id, e);
-        if (!settlementStarted) {
-            await env.DB.prepare(
-                "UPDATE orders SET status='PENDING', updated_at=CURRENT_TIMESTAMP WHERE id=? AND status='MATCHING'"
-            ).bind(order.id).run();
-        } else {
-            await env.DB.prepare(
-                "UPDATE orders SET status='ERROR', updated_at=CURRENT_TIMESTAMP WHERE id=? AND status='MATCHING'"
-            ).bind(order.id).run();
-        }
+        await env.DB.prepare(
+            "UPDATE orders SET status='ERROR', updated_at=CURRENT_TIMESTAMP WHERE id=? AND status='MATCHING'"
+        ).bind(order.id).run();
     }
 }
 

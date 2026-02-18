@@ -48,6 +48,7 @@ api.interceptors.response.use(
 
 export default {
     login: (password: string) => api.post('/auth/login', { password }),
+    getQuote: (symbol: string) => api.get('/public/quote', { params: { symbol } }),
     getPublicOverview: () => api.get('/public/overview'),
     getComments: () => api.get('/public/comments'),
     comment: (data: { nickname?: string; content: string }) => api.post('/public/comments', data),

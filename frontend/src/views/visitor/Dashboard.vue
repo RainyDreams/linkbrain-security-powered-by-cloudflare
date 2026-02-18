@@ -1,102 +1,153 @@
 ﻿<template>
-  <div class="mx-auto min-h-screen w-full max-w-[1320px] px-3 pb-6 pt-3 md:px-6 md:pt-5">
-    <header class="glass-card mb-3 p-4 md:p-5 fade-rise">
-      <div class="flex flex-wrap items-center justify-between gap-3">
+  <div class="public-shell">
+    <header class="glass-card head fade-rise">
+      <div class="head-main">
         <div>
-          <p class="text-[11px] uppercase tracking-[0.25em] text-slate-500">Zero Ben · Public Board</p>
-          <h1 class="mt-1 text-2xl font-extrabold text-slate-900">公开资产总览</h1>
-          <p class="mt-1 text-xs text-slate-600">{{ nowText }} · 数据每 15 秒自动刷新</p>
+          <p class="kicker">Zero Ben · Public Board</p>
+          <h1>公开资产总览</h1>
+          <p>{{ nowText }} · 每 15 秒自动刷新</p>
         </div>
-        <div class="flex gap-2">
+        <div class="head-actions">
           <button class="btn-solid btn-ghost" @click="loadOverview">刷新</button>
-          <button class="btn-solid btn-primary" @click="$router.push('/login')">管理员登录</button>
+          <button class="btn-solid btn-primary" @click="$router.push('/login')">管理端</button>
         </div>
       </div>
     </header>
 
-    <section class="grid gap-3 lg:grid-cols-[1.35fr,1fr]">
-      <article class="glass-card p-4 md:p-5 fade-rise">
-        <div class="grid gap-3 md:grid-cols-3">
-          <div class="md:col-span-2">
+    <section class="grid-main">
+      <article class="glass-card block fade-rise">
+        <div class="asset-top">
+          <div>
             <div class="kv-label">总资产 (CNY)</div>
-            <div class="mt-2 text-3xl font-extrabold font-mono text-slate-900">¥{{ formatMoney(data.assets.total) }}</div>
-            <div class="mt-2 flex flex-wrap gap-2 text-xs">
-              <span class="tag" :class="Number(data.assets.return_total_pct) >= 0 ? 'tag-pos' : 'tag-neg'">累计收益 {{ formatPct(data.assets.return_total_pct) }}</span>
-              <span class="tag" :class="Number(data.assets.day_pct) >= 0 ? 'tag-pos' : 'tag-neg'">当日 {{ formatPct(data.assets.day_pct) }}</span>
-              <span class="tag tag-neutral">冻结 ¥{{ formatMoney(data.assets.frozen) }}</span>
-            </div>
+            <div class="asset-total font-mono">¥{{ formatMoney(data.assets.total) }}</div>
           </div>
-          <div class="rounded-xl border border-[var(--line)] bg-white/85 p-3">
-            <div class="kv-label">持仓市值</div>
-            <div class="mt-1 font-mono text-lg font-bold text-slate-800">¥{{ formatMoney(data.assets.market_cap) }}</div>
-            <div class="mt-2 text-xs text-slate-600">可用资金 ¥{{ formatMoney(data.assets.balance) }}</div>
+          <div class="asset-tags">
+            <span class="tag" :class="Number(data.assets.return_total_pct) >= 0 ? 'tag-pos' : 'tag-neg'">累计 {{ formatPct(data.assets.return_total_pct) }}</span>
+            <span class="tag" :class="Number(data.assets.day_pct) >= 0 ? 'tag-pos' : 'tag-neg'">当日 {{ formatPct(data.assets.day_pct) }}</span>
           </div>
         </div>
 
-        <div class="mt-4">
-          <div class="mb-2 flex items-center justify-between">
-            <h2 class="panel-title">资产趋势</h2>
-            <span class="text-xs text-slate-500">{{ chartPoints.length }} 点</span>
+        <div class="asset-grid">
+          <div class="surface-soft asset-cell">
+            <span>持仓市值</span>
+            <strong class="font-mono">¥{{ formatMoney(data.assets.market_cap) }}</strong>
           </div>
-          <div ref="chartRef" class="h-[300px] w-full"></div>
+          <div class="surface-soft asset-cell">
+            <span>可用资金</span>
+            <strong class="font-mono">¥{{ formatMoney(data.assets.balance) }}</strong>
+          </div>
+          <div class="surface-soft asset-cell">
+            <span>冻结资金</span>
+            <strong class="font-mono">¥{{ formatMoney(data.assets.frozen) }}</strong>
+          </div>
         </div>
+
+        <div class="chart-head">
+          <h2 class="panel-title">资产趋势</h2>
+          <span class="text-xs text-slate-500">{{ chartPoints.length }} 点</span>
+        </div>
+        <div ref="chartRef" class="chart-box"></div>
       </article>
 
-      <div class="space-y-3 fade-rise">
-        <article class="glass-card overflow-hidden">
-          <div class="flex items-center justify-between border-b border-[var(--line)] px-4 py-3">
+      <aside class="side-stack fade-rise">
+        <article class="glass-card block">
+          <div class="section-head">
             <h2 class="panel-title">交易播报</h2>
             <span class="text-xs text-slate-500">{{ data.logs.length }} 条</span>
           </div>
-
-          <div class="max-h-[280px] overflow-y-auto scrollbar-thin px-4 py-3">
-            <div v-if="data.logs.length === 0" class="py-6 text-center text-sm text-slate-500">暂无交易播报</div>
-            <div v-for="(log, idx) in data.logs" :key="idx" class="mb-2 rounded-xl border border-[var(--line)] bg-white/90 p-3">
-              <div class="flex items-center justify-between gap-2">
-                <div class="text-sm font-semibold text-slate-800">{{ log.text }}</div>
+          <div class="log-list scrollbar-thin">
+            <div v-if="data.logs.length === 0" class="empty-line">暂无交易播报</div>
+            <article v-for="(log, idx) in data.logs" :key="idx" class="surface-soft log-item">
+              <div class="log-top">
+                <div class="font-semibold text-slate-800">{{ log.text }}</div>
                 <span class="text-[11px] text-slate-500">{{ log.time }}</span>
               </div>
-              <div class="mt-1 text-xs text-slate-600">{{ log.detail }}</div>
-            </div>
+              <div class="text-xs text-slate-600 mt-1">{{ log.detail }}</div>
+            </article>
           </div>
         </article>
 
         <InsightPanel title="公开看板说明" :items="publicHints" />
-      </div>
+      </aside>
     </section>
 
-    <section class="glass-card mt-3 overflow-hidden fade-rise">
-      <div class="flex items-center justify-between border-b border-[var(--line)] px-4 py-3">
+    <section class="glass-card block fade-rise">
+      <div class="section-head">
         <h2 class="panel-title">持仓明细</h2>
         <span class="text-xs text-slate-500">{{ data.holdings.length }} 只</span>
       </div>
 
-      <div v-if="data.holdings.length === 0" class="px-4 py-10 text-center text-sm text-slate-500">暂无持仓</div>
+      <div v-if="data.holdings.length === 0" class="empty-line">暂无持仓</div>
 
-      <div v-else class="overflow-x-auto scrollbar-thin">
-        <table class="min-w-full text-sm">
-          <thead class="data-table-head">
-            <tr>
-              <th class="px-4 py-3 text-left">证券</th>
-              <th class="px-4 py-3 text-right">数量</th>
-              <th class="px-4 py-3 text-right">现价</th>
-              <th class="px-4 py-3 text-right">浮盈亏</th>
-              <th class="px-4 py-3 text-right">仓位</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr v-for="h in data.holdings" :key="h.code" class="border-t border-[var(--line)]/70">
-              <td class="px-4 py-3">
-                <div class="font-semibold text-slate-800">{{ h.name }}</div>
-                <div class="font-mono text-xs text-slate-500">{{ h.code }}</div>
-              </td>
-              <td class="px-4 py-3 text-right font-mono text-slate-700">{{ formatQty(h.quantity) }}</td>
-              <td class="px-4 py-3 text-right font-mono text-slate-700">¥{{ formatMoney(h.price) }}</td>
-              <td class="px-4 py-3 text-right font-mono" :class="getColor(h.pnl_val)">¥{{ formatMoney(h.pnl_val) }}</td>
-              <td class="px-4 py-3 text-right font-mono text-slate-700">{{ h.position_rate }}%</td>
-            </tr>
-          </tbody>
-        </table>
+      <div v-else>
+        <div class="mobile-cards md:hidden">
+          <article v-for="h in data.holdings" :key="h.code" class="surface-soft card-item">
+            <div class="row-main">
+              <div>
+                <div class="name">{{ h.name }}</div>
+                <div class="code font-mono">{{ h.code }}</div>
+              </div>
+              <div class="text-right">
+                <div class="font-mono text-sm">¥{{ formatMoney(h.price) }}</div>
+                <div class="text-xs font-mono" :class="getColor(h.pnl_val)">¥{{ formatMoney(h.pnl_val) }}</div>
+              </div>
+            </div>
+            <div class="row-meta">
+              <span>数量 <strong class="font-mono">{{ formatQty(h.quantity) }}</strong></span>
+              <span>仓位 <strong class="font-mono">{{ h.position_rate }}%</strong></span>
+            </div>
+          </article>
+        </div>
+
+        <div class="hidden md:block overflow-x-auto scrollbar-thin">
+          <table class="min-w-full text-sm">
+            <thead class="data-table-head">
+              <tr>
+                <th class="px-4 py-3 text-left">证券</th>
+                <th class="px-4 py-3 text-right">数量</th>
+                <th class="px-4 py-3 text-right">现价</th>
+                <th class="px-4 py-3 text-right">浮盈亏</th>
+                <th class="px-4 py-3 text-right">仓位</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="h in data.holdings" :key="h.code" class="border-t border-[var(--line)]/70">
+                <td class="px-4 py-3">
+                  <div class="font-semibold text-slate-800">{{ h.name }}</div>
+                  <div class="font-mono text-xs text-slate-500">{{ h.code }}</div>
+                </td>
+                <td class="px-4 py-3 text-right font-mono text-slate-700">{{ formatQty(h.quantity) }}</td>
+                <td class="px-4 py-3 text-right font-mono text-slate-700">¥{{ formatMoney(h.price) }}</td>
+                <td class="px-4 py-3 text-right font-mono" :class="getColor(h.pnl_val)">¥{{ formatMoney(h.pnl_val) }}</td>
+                <td class="px-4 py-3 text-right font-mono text-slate-700">{{ h.position_rate }}%</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <section class="glass-card block fade-rise">
+      <div class="section-head">
+        <h2 class="panel-title">评论区</h2>
+        <span class="text-xs text-slate-500">{{ comments.length }} 条</span>
+      </div>
+
+      <form class="comment-form" @submit.prevent="submitComment">
+        <input v-model="commentForm.nickname" maxlength="20" class="comment-input" placeholder="昵称（可选）" />
+        <input v-model="commentForm.content" maxlength="500" class="comment-input" placeholder="请输入评论内容" />
+        <button class="btn-solid btn-primary" :disabled="commentSubmitting">{{ commentSubmitting ? '提交中...' : '发布' }}</button>
+      </form>
+
+      <div class="comment-list scrollbar-thin">
+        <div v-if="comments.length === 0" class="empty-line">暂无评论</div>
+        <article v-for="item in comments" :key="item.id" class="surface-soft comment-item">
+          <div class="comment-head">
+            <strong>{{ item.nickname || 'Guest' }}</strong>
+            <span>{{ item.created_at }}</span>
+          </div>
+          <p>{{ item.content }}</p>
+        </article>
       </div>
     </section>
   </div>
@@ -108,6 +159,7 @@ import * as echarts from 'echarts';
 import api from '../../api';
 import InsightPanel from '../../components/InsightPanel.vue';
 import { formatMoney, formatPct, formatQty, getColor, shanghaiNowText } from '../../utils/format';
+import { notifyError, notifySuccess } from '../../utils/notify';
 
 const chartRef = ref<HTMLElement | null>(null);
 let chart: echarts.ECharts | null = null;
@@ -128,6 +180,13 @@ const data = reactive<any>({
   charts: { asset: [], latest: null }
 });
 
+const comments = ref<any[]>([]);
+const commentSubmitting = ref(false);
+const commentForm = reactive({
+  nickname: '',
+  content: ''
+});
+
 const nowText = ref(shanghaiNowText());
 
 const chartPoints = computed(() => {
@@ -138,21 +197,9 @@ const chartPoints = computed(() => {
 
 const publicHints = computed(() => {
   return [
-    {
-      title: '数据口径',
-      text: '总资产 = 现金余额 + 持仓按当前价格估值。',
-      level: 'info'
-    },
-    {
-      title: '交易时效',
-      text: '交易日志存在刷新延迟，最终以管理端订单状态为准。',
-      level: 'risk'
-    },
-    {
-      title: '适用范围',
-      text: '本系统用于模拟交易与流程演示，不构成投资建议。',
-      level: 'ok'
-    }
+    { title: '数据口径', text: '总资产 = 现金余额 + 持仓按当前价格估值。', level: 'info' },
+    { title: '更新频率', text: '公开看板按固定频率刷新，实时性略低于管理端。', level: 'risk' },
+    { title: '使用说明', text: '本系统用于策略演示与流程验证，不构成投资建议。', level: 'ok' }
   ] as Array<{ title: string; text: string; level: 'info' | 'risk' | 'ok' }>;
 });
 
@@ -163,25 +210,25 @@ const renderChart = () => {
   const points = chartPoints.value;
 
   chart.setOption({
-    grid: { top: 14, left: 48, right: 18, bottom: 30 },
+    grid: { top: 14, left: 44, right: 16, bottom: 24 },
     xAxis: {
       type: 'category',
       data: points.map((x: any) => x.date),
       boundaryGap: false,
-      axisLabel: { color: '#5a6f82', fontSize: 11 },
-      axisLine: { lineStyle: { color: '#b5c7d5' } }
+      axisLabel: { color: '#64748b', fontSize: 11 },
+      axisLine: { lineStyle: { color: '#d8e0ea' } }
     },
     yAxis: {
       type: 'value',
       axisLabel: {
-        color: '#5a6f82',
+        color: '#64748b',
         formatter: (v: number) => `¥${Math.round(v)}`
       },
-      splitLine: { lineStyle: { color: '#dbe7f0' } }
+      splitLine: { lineStyle: { color: '#edf2f7' } }
     },
     tooltip: {
       trigger: 'axis',
-      backgroundColor: 'rgba(16,29,41,0.95)',
+      backgroundColor: 'rgba(10, 21, 38, 0.92)',
       borderWidth: 0,
       textStyle: { color: '#fff' },
       formatter: (params: any) => {
@@ -195,13 +242,13 @@ const renderChart = () => {
         smooth: 0.24,
         data: points.map((x: any) => x.value),
         symbol: 'circle',
-        symbolSize: 6,
-        lineStyle: { width: 2.3, color: '#2098d2' },
-        itemStyle: { color: '#10a37b' },
+        symbolSize: 5,
+        lineStyle: { width: 2, color: '#1488fc' },
+        itemStyle: { color: '#1488fc' },
         areaStyle: {
           color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
-            { offset: 0, color: 'rgba(32,152,210,0.29)' },
-            { offset: 1, color: 'rgba(16,163,123,0.03)' }
+            { offset: 0, color: 'rgba(20, 136, 252, 0.18)' },
+            { offset: 1, color: 'rgba(20, 136, 252, 0.02)' }
           ])
         }
       }
@@ -216,23 +263,58 @@ const loadOverview = async () => {
   renderChart();
 };
 
+const loadComments = async () => {
+  comments.value = await api.getComments();
+};
+
+const submitComment = async () => {
+  const nickname = commentForm.nickname.trim();
+  const content = commentForm.content.trim();
+
+  if (!content) {
+    notifyError('评论内容为空', '请输入评论内容后再提交。');
+    return;
+  }
+
+  commentSubmitting.value = true;
+  try {
+    await api.comment({ nickname, content });
+    commentForm.content = '';
+    await loadComments();
+    notifySuccess('评论发布成功', '你的留言已进入公开评论区。');
+  } finally {
+    commentSubmitting.value = false;
+  }
+};
+
 let refreshTimer: ReturnType<typeof setInterval> | null = null;
 let clockTimer: ReturnType<typeof setInterval> | null = null;
 
-onMounted(async () => {
-  await loadOverview();
+const resizeChart = () => {
+  chart?.resize();
+};
 
-  refreshTimer = setInterval(loadOverview, 15000);
+onMounted(async () => {
+  try {
+    await Promise.all([loadOverview(), loadComments()]);
+  } catch {
+    notifyError('公开看板加载失败', '请稍后刷新重试。');
+  }
+
+  refreshTimer = setInterval(async () => {
+    try {
+      await loadOverview();
+    } catch {
+      // ignore periodic refresh errors
+    }
+  }, 15000);
+
   clockTimer = setInterval(() => {
     nowText.value = shanghaiNowText();
   }, 1000);
 
   window.addEventListener('resize', resizeChart);
 });
-
-const resizeChart = () => {
-  chart?.resize();
-};
 
 onUnmounted(() => {
   if (refreshTimer) clearInterval(refreshTimer);
@@ -242,3 +324,262 @@ onUnmounted(() => {
   chart = null;
 });
 </script>
+
+<style scoped>
+.public-shell {
+  max-width: 1280px;
+  margin: 0 auto;
+  padding: 12px;
+  display: grid;
+  gap: 12px;
+}
+
+.head {
+  padding: 12px;
+}
+
+.head-main {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.kicker {
+  margin: 0;
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.22em;
+  color: var(--text-muted);
+}
+
+.head h1 {
+  margin: 6px 0 0;
+  font-size: 22px;
+  font-weight: 900;
+}
+
+.head p {
+  margin: 4px 0 0;
+  color: var(--text-soft);
+  font-size: 12px;
+}
+
+.head-actions {
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+}
+
+.grid-main {
+  display: grid;
+  gap: 12px;
+}
+
+.block {
+  padding: 12px;
+}
+
+.asset-top {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.asset-total {
+  margin-top: 4px;
+  font-size: 30px;
+  font-weight: 900;
+}
+
+.asset-tags {
+  display: flex;
+  gap: 6px;
+  align-items: flex-start;
+}
+
+.asset-grid {
+  margin-top: 10px;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.asset-cell {
+  padding: 8px 10px;
+  display: grid;
+  gap: 2px;
+  font-size: 12px;
+  color: var(--text-soft);
+}
+
+.asset-cell strong {
+  font-size: 14px;
+  color: var(--text);
+}
+
+.chart-head,
+.section-head {
+  margin-top: 12px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+}
+
+.chart-box {
+  margin-top: 8px;
+  height: 260px;
+  width: 100%;
+}
+
+.side-stack {
+  display: grid;
+  gap: 12px;
+}
+
+.log-list {
+  margin-top: 8px;
+  max-height: 260px;
+  overflow-y: auto;
+  display: grid;
+  gap: 8px;
+}
+
+.log-item {
+  padding: 9px 10px;
+}
+
+.log-top {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.empty-line {
+  padding: 28px 12px;
+  text-align: center;
+  color: var(--text-muted);
+  font-size: 13px;
+}
+
+.mobile-cards {
+  display: grid;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.card-item {
+  padding: 10px;
+}
+
+.row-main {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.name {
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.code {
+  font-size: 11px;
+  color: var(--text-muted);
+  margin-top: 2px;
+}
+
+.row-meta {
+  margin-top: 8px;
+  display: grid;
+  gap: 4px;
+  font-size: 12px;
+  color: var(--text-soft);
+}
+
+.comment-form {
+  margin-top: 10px;
+  display: grid;
+  grid-template-columns: minmax(120px, 180px) 1fr auto;
+  gap: 8px;
+}
+
+.comment-input {
+  border: 1px solid var(--line-strong);
+  border-radius: 10px;
+  padding: 9px 10px;
+  font-size: 13px;
+  outline: none;
+  background: #fff;
+}
+
+.comment-input:focus {
+  border-color: var(--brand);
+  box-shadow: 0 0 0 2px rgba(20, 136, 252, 0.12);
+}
+
+.comment-list {
+  margin-top: 10px;
+  max-height: 260px;
+  overflow-y: auto;
+  display: grid;
+  gap: 8px;
+}
+
+.comment-item {
+  padding: 9px 10px;
+}
+
+.comment-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 12px;
+}
+
+.comment-head span {
+  color: var(--text-muted);
+}
+
+.comment-item p {
+  margin: 6px 0 0;
+  font-size: 13px;
+  color: var(--text-soft);
+  line-height: 1.55;
+  word-break: break-word;
+}
+
+@media (max-width: 900px) {
+  .asset-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .comment-form {
+    grid-template-columns: 1fr;
+  }
+
+  .head-main {
+    flex-direction: column;
+  }
+}
+
+@media (min-width: 1080px) {
+  .public-shell {
+    padding: 16px 20px;
+  }
+
+  .grid-main {
+    grid-template-columns: minmax(0, 1.3fr) minmax(360px, 1fr);
+  }
+
+  .block,
+  .head {
+    padding: 14px;
+  }
+
+  .chart-box {
+    height: 300px;
+  }
+}
+</style>

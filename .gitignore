@@ -5,3 +5,5 @@
 /package-lock.json
 /setup.ps1
 /.wrangler/
+/dist/
+**/dist/

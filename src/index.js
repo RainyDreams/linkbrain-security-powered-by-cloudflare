@@ -4,7 +4,7 @@ import { placeOrder, cancelOrder, matchOrders } from './trade.js';
 import { handleScheduled } from './cron.js';
 import { jsonResponse, errorResponse, Money, Time, TradeRules } from './utils.js';
 import { fetchStockPrice } from './market.js';
-import { ensureRuntimeSchema } from './db.js';
+import { ensureRuntimeSchema, withTransaction } from './db.js';
 
 const LOGIN_MAX_FAILURES = 5;
 const LOGIN_WINDOW_MS = 15 * 60 * 1000;
@@ -112,59 +112,69 @@ const handleTransfer = async (env, body) => {
     }
 
     const cstDate = Time.formatCSTDate();
-    const daily = await env.DB.prepare(
-        "SELECT COALESCE(SUM(amount), 0) AS total FROM bank_transfers WHERE cst_date=? AND status='SUCCESS'"
-    ).bind(cstDate).first();
-    if ((daily.total || 0) + amountCent > TradeRules.MAX_DAILY_TRANSFER_CENT) {
-        return errorResponse(`当日累计转账超过限制（${Money.toYuan(TradeRules.MAX_DAILY_TRANSFER_CENT)}元）`, 400, 4106);
-    }
-
     const requestIdInput = asTrimmed(body.request_id);
     const requestId = requestIdInput || crypto.randomUUID();
     if (requestId.length > 80) return errorResponse('request_id 过长', 400, 4107);
 
-    const existing = await env.DB.prepare('SELECT * FROM bank_transfers WHERE request_id=?').bind(requestId).first();
-    if (existing) return jsonResponse(buildTransferResponse(existing));
-
     try {
-        await env.DB.prepare(
-            'INSERT INTO bank_transfers (request_id, type, amount, cst_date, status) VALUES (?, ?, ?, ?, ?)'
-        ).bind(requestId, type, amountCent, cstDate, 'PROCESSING').run();
-    } catch {
-        const conflict = await env.DB.prepare('SELECT * FROM bank_transfers WHERE request_id=?').bind(requestId).first();
-        if (conflict) return jsonResponse(buildTransferResponse(conflict));
-        return errorResponse('转账请求创建失败', 500, 5101);
-    }
-
-    try {
-        if (type === 'IN') {
-            const inRes = await env.DB.prepare('UPDATE account SET balance = balance + ? WHERE id = 1')
-                .bind(amountCent).run();
-            if ((inRes?.meta?.changes || 0) === 0) throw new Error('account update failed');
-        } else {
-            const outRes = await env.DB.prepare(
-                'UPDATE account SET balance = balance - ? WHERE id = 1 AND (balance - frozen_balance) >= ?'
-            ).bind(amountCent, amountCent).run();
-            if ((outRes?.meta?.changes || 0) === 0) {
-                await env.DB.prepare(
-                    "UPDATE bank_transfers SET status='FAILED', reason='可用余额不足', processed_at=CURRENT_TIMESTAMP WHERE request_id=?"
-                ).bind(requestId).run();
-                return errorResponse('可用余额不足', 400, 4001);
+        const result = await withTransaction(env, async () => {
+            const existing = await env.DB.prepare('SELECT * FROM bank_transfers WHERE request_id=?').bind(requestId).first();
+            if (existing) {
+                return { type: 'EXISTING', record: existing };
             }
-        }
 
-        await env.DB.prepare(
-            "UPDATE bank_transfers SET status='SUCCESS', processed_at=CURRENT_TIMESTAMP WHERE request_id=?"
-        ).bind(requestId).run();
+            const daily = await env.DB.prepare(
+                "SELECT COALESCE(SUM(amount), 0) AS total FROM bank_transfers WHERE cst_date=? AND status='SUCCESS'"
+            ).bind(cstDate).first();
+            if ((Number(daily?.total || 0) + amountCent) > TradeRules.MAX_DAILY_TRANSFER_CENT) {
+                return { type: 'LIMIT' };
+            }
+
+            const createRes = await env.DB.prepare(
+                'INSERT INTO bank_transfers (request_id, type, amount, cst_date, status) VALUES (?, ?, ?, ?, ?)'
+            ).bind(requestId, type, amountCent, cstDate, 'PROCESSING').run();
+            if ((createRes?.meta?.changes || 0) === 0) {
+                throw new Error('transfer create failed');
+            }
+
+            if (type === 'IN') {
+                const inRes = await env.DB.prepare('UPDATE account SET balance = balance + ? WHERE id = 1')
+                    .bind(amountCent).run();
+                if ((inRes?.meta?.changes || 0) === 0) throw new Error('account update failed');
+            } else {
+                const outRes = await env.DB.prepare(
+                    'UPDATE account SET balance = balance - ? WHERE id = 1 AND (balance - frozen_balance) >= ?'
+                ).bind(amountCent, amountCent).run();
+                if ((outRes?.meta?.changes || 0) === 0) {
+                    await env.DB.prepare(
+                        "UPDATE bank_transfers SET status='FAILED', reason='可用余额不足', processed_at=CURRENT_TIMESTAMP WHERE request_id=?"
+                    ).bind(requestId).run();
+                    const failed = await env.DB.prepare('SELECT * FROM bank_transfers WHERE request_id=?').bind(requestId).first();
+                    return { type: 'INSUFFICIENT', record: failed };
+                }
+            }
+
+            const doneRes = await env.DB.prepare(
+                "UPDATE bank_transfers SET status='SUCCESS', processed_at=CURRENT_TIMESTAMP WHERE request_id=?"
+            ).bind(requestId).run();
+            if ((doneRes?.meta?.changes || 0) === 0) throw new Error('transfer finalize failed');
+
+            const done = await env.DB.prepare('SELECT * FROM bank_transfers WHERE request_id=?').bind(requestId).first();
+            return { type: 'SUCCESS', record: done };
+        });
+
+        if (result.type === 'EXISTING') return jsonResponse(buildTransferResponse(result.record));
+        if (result.type === 'LIMIT') {
+            return errorResponse(`当日累计转账超过限制（${Money.toYuan(TradeRules.MAX_DAILY_TRANSFER_CENT)}元）`, 400, 4106);
+        }
+        if (result.type === 'INSUFFICIENT') return errorResponse('可用余额不足', 400, 4001);
+        return jsonResponse(buildTransferResponse(result.record));
     } catch (e) {
         await env.DB.prepare(
-            "UPDATE bank_transfers SET status='FAILED', reason=?, processed_at=CURRENT_TIMESTAMP WHERE request_id=?"
+            "UPDATE bank_transfers SET status='FAILED', reason=?, processed_at=CURRENT_TIMESTAMP WHERE request_id=? AND status='PROCESSING'"
         ).bind(String(e?.message || 'transfer failed').slice(0, 120), requestId).run();
         return errorResponse('转账失败，请稍后重试', 500, 5100);
     }
-
-    const done = await env.DB.prepare('SELECT * FROM bank_transfers WHERE request_id=?').bind(requestId).first();
-    return jsonResponse(buildTransferResponse(done));
 };
 
 export default {
@@ -184,6 +194,27 @@ export default {
 
         try {
             await ensureRuntimeSchema(env);
+
+            if (url.pathname === '/api/public/quote') {
+                if (method !== 'GET') return errorResponse('Method Not Allowed', 405, 4050);
+                const symbol = asTrimmed(url.searchParams.get('symbol'));
+                if (!symbol) return errorResponse('symbol 不能为空', 400, 4007);
+
+                const quote = await fetchStockPrice(symbol);
+                if (!quote) return errorResponse('无法获取行情', 400, 4005);
+
+                const lastPrice = Number(quote.price || 0);
+                const prevClose = Number(quote.prevClose || 0);
+                const pct = prevClose > 0 ? Number((((lastPrice - prevClose) / prevClose) * 100).toFixed(2)) : 0;
+                return jsonResponse({
+                    symbol: quote.symbol,
+                    name: quote.name,
+                    price: Number(lastPrice.toFixed(2)),
+                    prev_close: prevClose > 0 ? Number(prevClose.toFixed(2)) : null,
+                    change_pct: pct,
+                    source: quote.source || 'unknown'
+                });
+            }
 
             if (url.pathname === '/api/public/overview') {
                 if (method !== 'GET') return errorResponse('Method Not Allowed', 405, 4050);

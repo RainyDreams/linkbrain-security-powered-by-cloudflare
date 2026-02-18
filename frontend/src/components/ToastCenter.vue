@@ -1,29 +1,23 @@
 ﻿<template>
-  <div class="pointer-events-none fixed right-4 top-4 z-[120] flex w-[min(94vw,430px)] flex-col gap-2">
-    <transition-group name="toast" tag="div">
+  <div class="toast-root">
+    <transition-group name="toast" tag="div" class="toast-stack">
       <article
         v-for="item in noticeState.items"
         :key="item.id"
-        class="pointer-events-auto overflow-hidden rounded-2xl border shadow-2xl backdrop-blur-md"
+        class="toast-item"
         :class="toastClass[item.type]"
       >
-        <div class="flex items-start gap-3 p-3.5">
-          <div class="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-xs font-bold" :class="iconClass[item.type]">
-            {{ iconText[item.type] }}
+        <div class="toast-icon" :class="iconClass[item.type]">{{ iconText[item.type] }}</div>
+        <div class="toast-main">
+          <div class="toast-top">
+            <h4>{{ item.title }}</h4>
+            <span>{{ formatClock(item.createdAt) }}</span>
           </div>
-
-          <div class="flex-1">
-            <div class="flex items-center justify-between gap-2">
-              <h4 class="text-sm font-semibold leading-5">{{ item.title }}</h4>
-              <span class="text-[11px] opacity-70">{{ formatClock(item.createdAt) }}</span>
-            </div>
-            <p v-if="item.message" class="mt-1 text-[13px] leading-5 opacity-90">{{ item.message }}</p>
-            <p v-if="item.hint" class="mt-1 rounded-lg bg-black/5 px-2 py-1 text-[12px] leading-5">建议：{{ item.hint }}</p>
-
-            <div class="mt-2 flex items-center justify-between">
-              <span v-if="item.code" class="rounded-full border border-current/25 px-2 py-0.5 text-[11px]">Code {{ item.code }}</span>
-              <button class="text-[11px] opacity-80 hover:opacity-100" @click="dismissNotice(item.id)">关闭</button>
-            </div>
+          <p v-if="item.message">{{ item.message }}</p>
+          <p v-if="item.hint" class="toast-hint">建议：{{ item.hint }}</p>
+          <div class="toast-foot">
+            <span v-if="item.code" class="toast-code">Code {{ item.code }}</span>
+            <button @click="dismissNotice(item.id)">关闭</button>
           </div>
         </div>
       </article>
@@ -35,21 +29,21 @@
 import { dismissNotice, noticeState } from '../utils/notify';
 
 const toastClass = {
-  success: 'border-emerald-200/80 bg-emerald-50/95 text-emerald-900',
-  error: 'border-rose-200/80 bg-rose-50/95 text-rose-900',
-  info: 'border-sky-200/80 bg-sky-50/95 text-sky-900',
-  warning: 'border-amber-200/80 bg-amber-50/95 text-amber-900'
+  success: 'toast-success',
+  error: 'toast-error',
+  info: 'toast-info',
+  warning: 'toast-warning'
 };
 
 const iconClass = {
-  success: 'bg-emerald-100 text-emerald-700',
-  error: 'bg-rose-100 text-rose-700',
-  info: 'bg-sky-100 text-sky-700',
-  warning: 'bg-amber-100 text-amber-700'
+  success: 'icon-success',
+  error: 'icon-error',
+  info: 'icon-info',
+  warning: 'icon-warning'
 };
 
 const iconText = {
-  success: 'OK',
+  success: '✓',
   error: '!',
   info: 'i',
   warning: '!'
@@ -65,14 +59,160 @@ const formatClock = (ts: number) => {
 </script>
 
 <style scoped>
+.toast-root {
+  pointer-events: none;
+  position: fixed;
+  inset-inline: 0;
+  top: 10px;
+  z-index: 120;
+  display: flex;
+  justify-content: center;
+  padding: 0 10px;
+}
+
+.toast-stack {
+  width: min(480px, 100%);
+  display: grid;
+  gap: 8px;
+}
+
+.toast-item {
+  pointer-events: auto;
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 10px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: #fff;
+  padding: 10px;
+  box-shadow: 0 10px 24px rgba(8, 20, 38, 0.15);
+}
+
+.toast-success {
+  border-color: #abefc6;
+}
+
+.toast-error {
+  border-color: #fecdca;
+}
+
+.toast-info {
+  border-color: #b2ddff;
+}
+
+.toast-warning {
+  border-color: #fedf89;
+}
+
+.toast-icon {
+  width: 22px;
+  height: 22px;
+  border-radius: 999px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  font-weight: 800;
+  margin-top: 1px;
+}
+
+.icon-success {
+  color: #067647;
+  background: #dafbe9;
+}
+
+.icon-error {
+  color: #b42318;
+  background: #fee4e2;
+}
+
+.icon-info {
+  color: #175cd3;
+  background: #eff8ff;
+}
+
+.icon-warning {
+  color: #b54708;
+  background: #fffaeb;
+}
+
+.toast-main {
+  min-width: 0;
+}
+
+.toast-top {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  align-items: center;
+}
+
+.toast-top h4 {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 800;
+  color: var(--text);
+}
+
+.toast-top span {
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+.toast-main p {
+  margin: 6px 0 0;
+  font-size: 13px;
+  color: var(--text-soft);
+  line-height: 1.5;
+}
+
+.toast-hint {
+  background: #f7f9fc;
+  border: 1px dashed var(--line);
+  border-radius: 8px;
+  padding: 5px 7px;
+}
+
+.toast-foot {
+  margin-top: 7px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+}
+
+.toast-code {
+  font-size: 11px;
+  color: var(--text-muted);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 2px 8px;
+}
+
+.toast-foot button {
+  border: 0;
+  background: transparent;
+  color: var(--text-soft);
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
 .toast-enter-active,
 .toast-leave-active {
-  transition: all 0.26s ease;
+  transition: all 0.2s ease;
 }
 
 .toast-enter-from,
 .toast-leave-to {
   opacity: 0;
-  transform: translateY(-10px) scale(0.97);
+  transform: translateY(-8px);
+}
+
+@media (max-width: 640px) {
+  .toast-root {
+    top: auto;
+    bottom: 10px;
+  }
 }
 </style>

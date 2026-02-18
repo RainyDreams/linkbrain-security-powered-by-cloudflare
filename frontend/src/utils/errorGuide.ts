@@ -25,6 +25,11 @@ const errorGuide: Record<number, ErrorGuideItem> = {
     message: '暂时无法获取实时行情，系统拒绝当前委托。',
     hint: '请稍后重试，或确认证券代码是否正确。'
   },
+  4006: {
+    title: '交易时段限制',
+    message: '当前策略限制仅允许交易时段下单。',
+    hint: '若系统支持非交易时段挂单，请联系管理员核对后端版本。'
+  },
   4007: {
     title: '证券代码缺失',
     message: '下单请求未提供有效证券代码。',
@@ -59,6 +64,31 @@ const errorGuide: Record<number, ErrorGuideItem> = {
     title: '不在银证转账时段',
     message: '银证转账仅支持工作日 09:00-16:00。',
     hint: '请在可办理时段提交，避免重复点击。'
+  },
+  4102: {
+    title: '转账方向非法',
+    message: '转账类型仅允许 IN（转入）或 OUT（转出）。',
+    hint: '请重新选择转账方向。'
+  },
+  4103: {
+    title: '转账金额格式错误',
+    message: '金额仅支持最多两位小数。',
+    hint: '示例：1000 或 1000.50。'
+  },
+  4104: {
+    title: '转账金额无效',
+    message: '转账金额必须大于 0。',
+    hint: '请填写正数金额后重试。'
+  },
+  4105: {
+    title: '超过单笔限额',
+    message: '本次转账金额超过单笔风控限制。',
+    hint: '请拆分为多笔或降低金额。'
+  },
+  4107: {
+    title: 'request_id 过长',
+    message: '请求流水号长度超出系统限制。',
+    hint: '请缩短 request_id 后重试。'
   },
   4106: {
     title: '当日转账限额触发',
