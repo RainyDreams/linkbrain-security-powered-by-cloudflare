@@ -31,6 +31,8 @@ interface OrderItem {
     status: string;
     time: string;
     created_at: string;
+    remark?: string;
+    strategy_tag?: string;
 }
 
 export const useMarketStore = defineStore('market', {

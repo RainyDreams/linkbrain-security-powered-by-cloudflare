@@ -2,7 +2,6 @@
   <section class="glass-card p-3">
     <div class="flex items-center justify-between">
       <h3 class="panel-title">{{ title }}</h3>
-      <span class="text-[11px] text-slate-500">专业提示</span>
     </div>
 
     <div class="mt-2 space-y-2">

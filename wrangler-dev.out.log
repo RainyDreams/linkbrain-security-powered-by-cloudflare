@@ -1,0 +1,12 @@
+
+ ⛅️ wrangler 4.61.1 (update available 4.67.0)
+─────────────────────────────────────────────
+Your Worker has access to the following bindings:
+Binding                                                                   Resource                  Mode
+env.DB (security-db)                                                      D1 Database               local
+env.JWT_SECRET ("linkbrainsecurity")                                      Environment Variable      local
+env.ADMIN_PASSWORD_SALT ("lingbenzhengquanjiaoyi")                        Environment Variable      local
+env.ADMIN_PASSWORD_HASH ("ad96d22ea0ee883b1c73617087cb053d0ada8...")      Environment Variable      local
+
+⎔ Starting local server...
+[wrangler:info] Ready on http://127.0.0.1:8787

@@ -1,6 +1,5 @@
--- schema.sql
+﻿-- migrations/0002_force_reset.sql
 
--- 1. Cleanup
 DROP TABLE IF EXISTS account;
 DROP TABLE IF EXISTS holdings;
 DROP TABLE IF EXISTS orders;
@@ -12,13 +11,7 @@ DROP TABLE IF EXISTS bank_transfers;
 DROP TABLE IF EXISTS login_attempts;
 DROP TABLE IF EXISTS audit_technical;
 DROP TABLE IF EXISTS audit_financial;
-DROP TABLE IF EXISTS ai_committee_runs;
-DROP TABLE IF EXISTS ai_committee_tasks;
-DROP TABLE IF EXISTS ai_pending_actions;
-DROP TABLE IF EXISTS trade_reports;
-DROP TABLE IF EXISTS trade_experiences;
 
--- 2. Account
 CREATE TABLE account (
     id INTEGER PRIMARY KEY,
     balance INTEGER NOT NULL DEFAULT 0 CHECK (balance >= 0),
@@ -27,7 +20,6 @@ CREATE TABLE account (
     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
 );
 
--- 3. Holdings
 CREATE TABLE holdings (
     symbol TEXT PRIMARY KEY,
     name TEXT,
@@ -39,7 +31,6 @@ CREATE TABLE holdings (
     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
 );
 
--- 4. Orders
 CREATE TABLE orders (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     symbol TEXT NOT NULL,
@@ -50,15 +41,12 @@ CREATE TABLE orders (
     filled_qty INTEGER NOT NULL DEFAULT 0 CHECK (filled_qty >= 0 AND filled_qty <= qty),
     status TEXT NOT NULL DEFAULT 'PENDING' CHECK (status IN ('PENDING', 'MATCHING', 'FILLED', 'PARTIAL', 'CANCELLED', 'EXPIRED', 'ERROR')),
     freeze_amount INTEGER NOT NULL DEFAULT 0 CHECK (freeze_amount >= 0),
-    remark TEXT NOT NULL DEFAULT '',
-    strategy_tag TEXT NOT NULL DEFAULT '',
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
 );
 CREATE INDEX idx_orders_status ON orders(status);
 CREATE INDEX idx_orders_created ON orders(created_at);
 
--- 5. Trades
 CREATE TABLE trades (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     order_id INTEGER,
@@ -77,7 +65,6 @@ CREATE TABLE trades (
 CREATE INDEX idx_trades_order ON trades(order_id);
 CREATE INDEX idx_trades_time ON trades(trade_time);
 
--- 6. Daily snapshots
 CREATE TABLE snapshots (
     date TEXT PRIMARY KEY,
     total_assets INTEGER NOT NULL DEFAULT 0 CHECK (total_assets >= 0),
@@ -86,7 +73,6 @@ CREATE TABLE snapshots (
     max_drawdown REAL NOT NULL DEFAULT 0
 );
 
--- 7. Comments
 CREATE TABLE comments (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     nickname TEXT NOT NULL DEFAULT 'Guest',
@@ -94,7 +80,6 @@ CREATE TABLE comments (
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP
 );
 
--- 8. Bank transfer logs (idempotency + audit)
 CREATE TABLE bank_transfers (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     request_id TEXT NOT NULL UNIQUE,
@@ -108,7 +93,6 @@ CREATE TABLE bank_transfers (
 );
 CREATE INDEX idx_bank_transfers_date ON bank_transfers(cst_date, status);
 
--- 9. Login attempt rate-limit
 CREATE TABLE login_attempts (
     ip TEXT PRIMARY KEY,
     fail_count INTEGER NOT NULL DEFAULT 0 CHECK (fail_count >= 0),
@@ -117,7 +101,6 @@ CREATE TABLE login_attempts (
     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
 );
 
--- 10. Technical audit logs
 CREATE TABLE audit_technical (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     level TEXT NOT NULL,
@@ -139,7 +122,6 @@ CREATE INDEX idx_audit_tech_time ON audit_technical(created_at_cst DESC);
 CREATE INDEX idx_audit_tech_scope ON audit_technical(scope, status);
 CREATE INDEX idx_audit_tech_order ON audit_technical(order_id, symbol, request_id);
 
--- 11. Financial audit logs
 CREATE TABLE audit_financial (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     event_type TEXT NOT NULL,
@@ -176,100 +158,18 @@ CREATE INDEX idx_audit_fin_scope ON audit_financial(scope, status);
 CREATE INDEX idx_audit_fin_order ON audit_financial(order_id, symbol, request_id);
 CREATE INDEX idx_audit_fin_amount ON audit_financial(amount, fee, tax);
 
--- 12. Meta
 CREATE TABLE meta (
     key TEXT PRIMARY KEY,
     value TEXT,
     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
 );
 
--- 13. AI committee runs
-CREATE TABLE ai_committee_runs (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    run_id TEXT NOT NULL UNIQUE,
-    trigger TEXT NOT NULL,
-    status TEXT NOT NULL,
-    phase TEXT,
-    symbols TEXT,
-    actions_total INTEGER NOT NULL DEFAULT 0,
-    executed_total INTEGER NOT NULL DEFAULT 0,
-    manager_penalty INTEGER NOT NULL DEFAULT 0,
-    president_penalty INTEGER NOT NULL DEFAULT 0,
-    pnl_day INTEGER NOT NULL DEFAULT 0,
-    detail TEXT,
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-    created_at_cst TEXT NOT NULL
-);
-CREATE INDEX idx_ai_committee_runs_time ON ai_committee_runs(created_at_cst DESC);
-CREATE INDEX idx_ai_committee_runs_status ON ai_committee_runs(status, trigger);
-
--- 14. AI committee task queue
-CREATE TABLE ai_committee_tasks (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    task_id TEXT NOT NULL UNIQUE,
-    status TEXT NOT NULL CHECK (status IN ('PENDING', 'RUNNING', 'DONE', 'FAILED')),
-    payload TEXT,
-    result TEXT,
-    error_message TEXT,
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-    claimed_at DATETIME,
-    finished_at DATETIME,
-    created_at_cst TEXT NOT NULL
-);
-CREATE INDEX idx_ai_committee_tasks_status ON ai_committee_tasks(status, id);
-CREATE INDEX idx_ai_committee_tasks_time ON ai_committee_tasks(created_at_cst DESC);
-
--- 15. AI pending actions (manual confirm queue)
-CREATE TABLE ai_pending_actions (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    run_id TEXT NOT NULL,
-    status TEXT NOT NULL CHECK (status IN ('PENDING', 'EXECUTED', 'REJECTED', 'FAILED')),
-    action_payload TEXT NOT NULL,
-    result_payload TEXT,
-    reason TEXT,
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-    decided_at DATETIME,
-    created_at_cst TEXT NOT NULL
-);
-CREATE INDEX idx_ai_pending_actions_status ON ai_pending_actions(status, id);
-CREATE INDEX idx_ai_pending_actions_run ON ai_pending_actions(run_id, status);
-CREATE INDEX idx_ai_pending_actions_time ON ai_pending_actions(created_at_cst DESC);
-
--- 16. Trading reports (daily / weekly / monthly)
-CREATE TABLE trade_reports (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    period_type TEXT NOT NULL CHECK (period_type IN ('DAILY', 'WEEKLY', 'MONTHLY')),
-    period_key TEXT NOT NULL,
-    title TEXT NOT NULL DEFAULT '',
-    summary TEXT NOT NULL DEFAULT '',
-    experience TEXT NOT NULL DEFAULT '',
-    created_by TEXT NOT NULL DEFAULT 'manager',
-    source TEXT NOT NULL DEFAULT 'manual',
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-    created_at_cst TEXT NOT NULL
-);
-CREATE INDEX idx_trade_reports_period ON trade_reports(period_type, period_key, id DESC);
-CREATE INDEX idx_trade_reports_time ON trade_reports(created_at_cst DESC);
-
--- 17. Trading experience library (concise lessons learned)
-CREATE TABLE trade_experiences (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    content TEXT NOT NULL,
-    weight INTEGER NOT NULL DEFAULT 50 CHECK (weight >= 0 AND weight <= 100),
-    source TEXT NOT NULL DEFAULT 'manager',
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-    created_at_cst TEXT NOT NULL
-);
-CREATE INDEX idx_trade_experiences_time ON trade_experiences(created_at_cst DESC);
-
--- 18. Seed data
 INSERT INTO account (id, balance, frozen_balance, initial_capital)
 VALUES (1, 100000000, 0, 100000000);
 
 INSERT INTO snapshots (date, total_assets, day_pnl, total_return_rate, max_drawdown)
 VALUES (DATE('now', '-1 day'), 100000000, 0, 0, 0);
 
+-- Seed holdings here if needed:
+-- INSERT INTO holdings (symbol, name, quantity, available_qty, avg_cost, total_cost)
+-- VALUES ('sh600519', 'Kweichow Moutai', 100, 0, 150000, 15000000);

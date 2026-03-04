@@ -3,7 +3,9 @@
   "version": "1.0.0",
   "scripts": {
     "dev": "vite",
-    "build": "vite build && wrangler pages deploy",
+    "build": "vite build",
+    "deploy": "vite build && wrangler pages deploy --branch production",
+    "deploy:prod": "wrangler pages deploy ./dist --project-name zero-ben-frontend --branch production",
     "preview": "vite preview"
   },
   "dependencies": {

@@ -27,7 +27,6 @@
       </div>
     </section>
 
-    <InsightPanel title="资金与持仓规则" :items="insightItems" />
 
     <section class="glass-card overflow-hidden">
       <div class="section-head">
@@ -62,7 +61,7 @@
         </div>
 
         <div class="hidden md:block overflow-x-auto scrollbar-thin">
-          <table class="min-w-full text-sm">
+          <table class="min-w-full table-dense text-[12px]">
             <thead class="data-table-head">
               <tr>
                 <th class="px-4 py-3 text-left">证券</th>
@@ -93,47 +92,45 @@
         </div>
       </div>
     </section>
+    <Teleport to="body">
+      <div v-if="showTransfer" class="modal-wrap" @click.self="closeTransferModal">
+        <div class="modal-card" role="dialog" aria-modal="true" tabindex="-1" @click.stop>
+          <h3>{{ transferType === 'IN' ? '银证转入' : '银证转出' }}</h3>
 
-    <div v-if="showTransfer" class="modal-wrap" @click="showTransfer = false">
-      <div class="modal-card" @click.stop>
-        <h3>{{ transferType === 'IN' ? '银证转入' : '银证转出' }}</h3>
-        <p class="modal-tip">办理时段：工作日 09:00-16:00，系统按 request_id 保证幂等。</p>
+          <label class="field-block">
+            <span class="field-label">金额(元)</span>
+            <input
+              v-model="transferAmount"
+              type="number"
+              step="0.01"
+              min="0"
+              class="field-input"
+              placeholder="0.00"
+            />
+          </label>
 
-        <label class="field-block">
-          <span class="field-label">金额(元)</span>
-          <input
-            v-model="transferAmount"
-            type="number"
-            step="0.01"
-            min="0"
-            class="field-input"
-            placeholder="0.00"
-          />
-        </label>
+          <div class="surface-soft modal-meta">
+            <div>request_id: <span class="font-mono">{{ previewRequestId }}</span></div>
+          </div>
 
-        <div class="surface-soft modal-meta">
-          <div>request_id: <span class="font-mono">{{ previewRequestId }}</span></div>
-          <div>提交后请以返回状态为准（SUCCESS/FAILED）。</div>
-        </div>
-
-        <div class="modal-actions">
-          <button class="btn-solid btn-ghost" @click="showTransfer = false">取消</button>
-          <button class="btn-solid btn-primary" :disabled="transfering" @click="submitTransfer">
-            {{ transfering ? '提交中...' : '确认提交' }}
-          </button>
+          <div class="modal-actions">
+            <button class="btn-solid btn-ghost" @click="closeTransferModal">取消</button>
+            <button class="btn-solid btn-primary" :disabled="transfering" @click="submitTransfer">
+              {{ transfering ? '提交中...' : '确认提交' }}
+            </button>
+          </div>
         </div>
       </div>
-    </div>
+    </Teleport>
   </div>
 </template>
 
 <script setup lang="ts">
-import { computed, ref } from 'vue';
+import { computed, onUnmounted, ref, watch } from 'vue';
 import { useRouter } from 'vue-router';
 import api from '../../api';
-import InsightPanel from '../../components/InsightPanel.vue';
 import { useMarketStore } from '../../stores/market';
-import { formatMoney, formatQty, getColor, isTradingSession } from '../../utils/format';
+import { formatMoney, formatQty, getColor } from '../../utils/format';
 import { notifyError, notifySuccess } from '../../utils/notify';
 
 const store = useMarketStore();
@@ -154,26 +151,6 @@ const rows = computed(() => {
   });
 });
 
-const insightItems = computed(() => {
-  return [
-    {
-      title: 'T+1 规则',
-      text: '卖出以 available_qty 为准，买入当日新增仓位通常次日可卖。',
-      level: 'info'
-    },
-    {
-      title: '转账时段',
-      text: isTradingSession() ? '当前处于交易时段，可同步处理转账。' : '转账仍受工作日 09:00-16:00 限制。',
-      level: isTradingSession() ? 'ok' : 'risk'
-    },
-    {
-      title: '风险提示',
-      text: '转出前请预留委托所需可用资金，避免挂单触发资金不足。',
-      level: 'info'
-    }
-  ] as Array<{ title: string; text: string; level: 'info' | 'risk' | 'ok' }>;
-});
-
 const showTransfer = ref(false);
 const transferType = ref<'IN' | 'OUT'>('IN');
 const transferAmount = ref('');
@@ -187,10 +164,14 @@ const openTransfer = (type: 'IN' | 'OUT') => {
   showTransfer.value = true;
 };
 
+const closeTransferModal = () => {
+  showTransfer.value = false;
+};
+
 const submitTransfer = async () => {
   const amount = Number(transferAmount.value);
   if (!Number.isFinite(amount) || amount <= 0) {
-    notifyError('金额输入无效', '转账金额必须大于 0。', '请按元输入，最多两位小数。');
+    notifyError('金额输入无效', '转账金额必须大于 0。');
     return;
   }
 
@@ -202,12 +183,8 @@ const submitTransfer = async () => {
       request_id: previewRequestId.value
     });
 
-    notifySuccess(
-      transferType.value === 'IN' ? '银证转入提交成功' : '银证转出提交成功',
-      `请求流水号：${previewRequestId.value}`,
-      '请后续确认状态为 SUCCESS。'
-    );
-    showTransfer.value = false;
+    notifySuccess(transferType.value === 'IN' ? '银证转入提交成功' : '银证转出提交成功', `请求流水号：${previewRequestId.value}`);
+    closeTransferModal();
     await store.fetchAdminData();
   } finally {
     transfering.value = false;
@@ -216,12 +193,25 @@ const submitTransfer = async () => {
 
 const goTrade = (symbol: string, side: 'buy' | 'sell') => {
   store.currentTradeSymbol = symbol;
-  router.push(`/admin/${side}`);
+  router.push({ path: '/admin/trade', query: { side: side === 'buy' ? 'BUY' : 'SELL' } });
 };
 
 const refresh = async () => {
   await store.fetchAdminData(true);
 };
+
+const toggleBodyScroll = (locked: boolean) => {
+  if (typeof document === 'undefined') return;
+  document.body.style.overflow = locked ? 'hidden' : '';
+};
+
+watch(showTransfer, (visible) => {
+  toggleBodyScroll(visible);
+});
+
+onUnmounted(() => {
+  toggleBodyScroll(false);
+});
 </script>
 
 <style scoped>
@@ -242,7 +232,7 @@ const refresh = async () => {
 
 .metric-box {
   border: 1px solid var(--line);
-  border-radius: 10px;
+  border-radius: var(--radius-sm);
   background: var(--surface-soft);
   padding: 9px 10px;
 }
@@ -313,7 +303,7 @@ const refresh = async () => {
 .item-actions button,
 .btn-mini {
   border: 1px solid var(--line-strong);
-  border-radius: 9px;
+  border-radius: var(--radius-sm);
   background: #fff;
   color: var(--text-soft);
   padding: 5px 10px;
@@ -328,34 +318,32 @@ const refresh = async () => {
 .modal-wrap {
   position: fixed;
   inset: 0;
-  background: rgba(11, 18, 33, 0.5);
+  background: rgba(11, 18, 33, 0.46);
+  backdrop-filter: blur(4px);
   display: flex;
   align-items: center;
   justify-content: center;
   padding: 14px;
-  z-index: 90;
+  z-index: 2400;
 }
 
 .modal-card {
-  width: min(480px, 100%);
-  border-radius: 14px;
+  width: min(440px, 96vw);
+  max-height: min(88vh, 760px);
+  overflow: auto;
+  border-radius: var(--radius-lg);
   border: 1px solid var(--line);
   background: #fff;
-  padding: 14px;
+  padding: 12px;
   display: grid;
-  gap: 10px;
+  gap: 9px;
+  box-shadow: var(--shadow-soft);
 }
 
 .modal-card h3 {
   margin: 0;
-  font-size: 18px;
+  font-size: 15px;
   font-weight: 800;
-}
-
-.modal-tip {
-  margin: 0;
-  color: var(--text-soft);
-  font-size: 12px;
 }
 
 .field-block {
@@ -364,16 +352,16 @@ const refresh = async () => {
 }
 
 .field-label {
-  font-size: 12px;
+  font-size: 11px;
   color: var(--text-soft);
 }
 
 .field-input {
   width: 100%;
   border: 1px solid var(--line-strong);
-  border-radius: 10px;
-  padding: 10px;
-  font-size: 16px;
+  border-radius: var(--radius-sm);
+  padding: 9px;
+  font-size: 13px;
 }
 
 .modal-meta {
@@ -388,6 +376,27 @@ const refresh = async () => {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 8px;
+}
+
+@media (max-width: 640px) {
+  .modal-wrap {
+    padding: 8px;
+  }
+
+  .modal-card {
+    width: 100%;
+    max-height: 92vh;
+    padding: 10px;
+    gap: 8px;
+  }
+
+  .modal-card h3 {
+    font-size: 14px;
+  }
+
+  .field-input {
+    font-size: 12px;
+  }
 }
 
 @media (min-width: 920px) {

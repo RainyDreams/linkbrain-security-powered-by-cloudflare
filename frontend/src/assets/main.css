@@ -1,22 +1,22 @@
-﻿@import url('https://fonts.googleapis.com/css2?family=Manrope:wght@500;600;700;800&family=Noto+Sans+SC:wght@400;500;700;900&family=JetBrains+Mono:wght@500;700&display=swap');
+﻿@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700;800&family=Noto+Sans+SC:wght@400;500;700;900&family=JetBrains+Mono:wght@500;700&display=swap');
 
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
 :root {
-  --bg: #f2f5f8;
+  --bg: #f6f8fb;
   --surface: #ffffff;
-  --surface-soft: #f7f9fc;
-  --line: #d8e0ea;
-  --line-strong: #bfcddd;
+  --surface-soft: #fbfcfe;
+  --line: #e3e9f0;
+  --line-strong: #ced9e6;
 
-  --text: #0f1b2a;
-  --text-soft: #3f556e;
-  --text-muted: #6b7f96;
+  --text: #0f172a;
+  --text-soft: #334155;
+  --text-muted: #64748b;
 
-  --brand: #1488fc;
-  --brand-deep: #0b63ce;
+  --brand: #10a37f;
+  --brand-deep: #0f8f6f;
   --tg-blue: #229ed9;
   --openai-teal: #10a37f;
 
@@ -25,10 +25,16 @@
   --warn: #b54708;
   --danger: #d92d20;
   --ok: #067647;
+
+  --radius-lg: 10px;
+  --radius-md: 6px;
+  --radius-sm: 6px;
+  --shadow-soft: 0 1px 2px rgba(15, 23, 42, 0.04), 0 10px 30px rgba(15, 23, 42, 0.05);
 }
 
 * {
   box-sizing: border-box;
+  -webkit-tap-highlight-color: transparent;
 }
 
 html,
@@ -37,15 +43,23 @@ body,
   min-height: 100%;
 }
 
+html {
+  font-size: 15px;
+}
+
 body {
   margin: 0;
+  font-size: 13px;
+  line-height: 1.42;
   color: var(--text);
-  font-family: 'Manrope', 'Noto Sans SC', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+  font-family: 'IBM Plex Sans', 'Noto Sans SC', 'PingFang SC', 'Microsoft YaHei', sans-serif;
   background:
-    linear-gradient(140deg, rgba(20, 136, 252, 0.08) 0%, rgba(20, 136, 252, 0) 42%),
-    linear-gradient(0deg, rgba(255, 255, 255, 0.8), rgba(255, 255, 255, 0.8)),
+    radial-gradient(1200px 380px at 10% -20%, rgba(16, 163, 127, 0.08), transparent 60%),
+    radial-gradient(900px 300px at 120% 0%, rgba(15, 23, 42, 0.04), transparent 62%),
     var(--bg);
+  background-attachment: fixed;
   -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
 }
 
 .font-mono {
@@ -54,22 +68,22 @@ body {
 
 .glass-card {
   border: 1px solid var(--line);
-  border-radius: 14px;
+  border-radius: var(--radius-lg);
   background: var(--surface);
-  box-shadow: 0 1px 2px rgba(8, 20, 38, 0.03), 0 14px 24px rgba(8, 20, 38, 0.05);
+  box-shadow: var(--shadow-soft);
 }
 
 .surface-soft {
   border: 1px solid var(--line);
-  border-radius: 12px;
+  border-radius: var(--radius-md);
   background: var(--surface-soft);
 }
 
 .panel-title {
   margin: 0;
-  font-size: 14px;
+  font-size: 12px;
   font-weight: 800;
-  letter-spacing: 0.03em;
+  letter-spacing: 0.02em;
   color: var(--text);
 }
 
@@ -81,22 +95,24 @@ body {
 }
 
 .kv-value {
-  font-size: 1rem;
+  font-size: 0.95rem;
   font-weight: 800;
   color: var(--text);
 }
 
 .btn-solid {
-  @apply inline-flex items-center justify-center rounded-xl px-4 py-2.5 text-sm font-semibold transition;
+  @apply inline-flex items-center justify-center px-4 py-2 text-[12px] font-semibold transition;
+  border-radius: var(--radius-sm);
 }
 
 .btn-primary {
   color: #fff;
-  background: var(--brand);
+  border: 1px solid var(--brand-deep);
+  background: linear-gradient(180deg, #16b58d 0%, var(--brand) 100%);
 }
 
 .btn-primary:hover {
-  background: var(--brand-deep);
+  filter: brightness(1.02);
 }
 
 .btn-primary:disabled {
@@ -110,12 +126,16 @@ body {
 }
 
 .btn-ghost:hover {
-  background: #f7fbff;
-  border-color: #9fc5e8;
+  background: #f8fafc;
+  border-color: #c9d5e4;
+}
+
+.btn-solid:active {
+  transform: translateY(0.5px);
 }
 
 .tag {
-  border-radius: 999px;
+  border-radius: var(--radius-sm);
   padding: 2px 10px;
   font-size: 11px;
   font-weight: 700;
@@ -133,20 +153,22 @@ body {
 
 .tag-neutral {
   color: var(--text-soft);
-  background: #e8eff7;
+  background: #f1f5f9;
 }
 
 .status-chip {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  border-radius: 999px;
-  border: 1px solid #bedbfd;
-  padding: 2px 10px;
+  border-radius: var(--radius-sm);
+  border: 1px solid rgba(16, 163, 127, 0.32);
+  padding: 0 6px;
   font-size: 11px;
   font-weight: 700;
-  color: #175cd3;
-  background: #eff8ff;
+  color: #0f766e;
+  background: rgba(16, 163, 127, 0.1);
+  line-height: 14px;
+  height: 16px;
 }
 
 .status-chip::before {
@@ -159,7 +181,7 @@ body {
 
 .prompt-card {
   border: 1px solid var(--line);
-  border-radius: 12px;
+  border-radius: var(--radius-sm);
   background: var(--surface-soft);
   padding: 10px 12px;
 }
@@ -179,16 +201,25 @@ body {
 }
 
 .data-table-head {
-  background: #f3f8fd;
-  color: #53687f;
+  background: #f7fafc;
+  color: #64748b;
   font-size: 11px;
   text-transform: uppercase;
   letter-spacing: 0.05em;
 }
 
+.table-dense th,
+.table-dense td {
+  padding: 6px 8px;
+}
+
+.table-dense tr:hover {
+  background: #f8fafc;
+}
+
 .scrollbar-thin {
   scrollbar-width: thin;
-  scrollbar-color: #afc5de transparent;
+  scrollbar-color: #c5d2e1 transparent;
 }
 
 .scrollbar-thin::-webkit-scrollbar {
@@ -198,17 +229,28 @@ body {
 
 .scrollbar-thin::-webkit-scrollbar-thumb {
   border-radius: 999px;
-  background: #afc5de;
+  background: #c5d2e1;
 }
 
 .fade-rise {
-  animation: fade-rise 0.24s ease both;
+  animation: fade-rise 0.2s ease both;
+}
+
+.page-fade-enter-active,
+.page-fade-leave-active {
+  transition: opacity 0.2s ease, transform 0.2s ease;
+}
+
+.page-fade-enter-from,
+.page-fade-leave-to {
+  opacity: 0;
+  transform: translateY(3px);
 }
 
 @keyframes fade-rise {
   from {
     opacity: 0;
-    transform: translateY(5px);
+    transform: translateY(4px);
   }
 
   to {
@@ -218,11 +260,44 @@ body {
 }
 
 @media (max-width: 640px) {
+  html {
+    font-size: 14px;
+  }
+
+  body {
+    font-size: 11px;
+  }
+
+  .panel-title {
+    font-size: 11px;
+  }
+
+  .kv-label {
+    font-size: 10px;
+  }
+
+  .status-chip {
+    font-size: 10px;
+    padding: 0 5px;
+    gap: 4px;
+    height: 14px;
+    line-height: 12px;
+  }
+
+  .status-chip::before {
+    width: 5px;
+    height: 5px;
+  }
+
   .glass-card {
-    border-radius: 12px;
+    border-radius: var(--radius-md);
   }
 
   .btn-solid {
-    @apply px-3.5 py-2.5 text-[13px];
+    @apply px-3 py-[7px] text-[11px];
+  }
+
+  .hide-mobile {
+    display: none !important;
   }
 }

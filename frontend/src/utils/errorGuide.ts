@@ -37,8 +37,8 @@ const errorGuide: Record<number, ErrorGuideItem> = {
   },
   4008: {
     title: '委托参数不合法',
-    message: '下单参数触发风控校验失败。',
-    hint: '请检查方向、价格、数量是否满足交易规则。'
+    message: '下单参数触发风控校验失败（含价格笼子/涨跌停限制）。',
+    hint: '请检查方向、价格、数量及价格区间是否满足交易规则。'
   },
   4009: {
     title: '委托金额异常',

@@ -69,19 +69,40 @@ export const Time = {
       return date.toISOString().replace('T', ' ').substring(0, 19);
   },
 
-  // 严格判断是否为交易时间
+  getHHMM: (date = null) => {
+      const cst = date || Time.getCST();
+      return cst.getHours() * 100 + cst.getMinutes();
+  },
+
+  // 集合竞价时段：09:15-09:25、14:57-15:00
+  isCallAuction: (date = null) => {
+      const cst = date || Time.getCST();
+      const day = cst.getDay();
+      if (day === 0 || day === 6) return false;
+      const t = Time.getHHMM(cst);
+      return (t >= 915 && t < 925) || (t >= 1457 && t <= 1500);
+  },
+
+  // 连续竞价时段：09:30-11:30、13:00-14:57
+  isContinuousAuction: (date = null) => {
+      const cst = date || Time.getCST();
+      const day = cst.getDay();
+      if (day === 0 || day === 6) return false;
+      const t = Time.getHHMM(cst);
+      const isMorning = t >= 930 && t <= 1130;
+      const isAfternoon = t >= 1300 && t < 1457;
+      return isMorning || isAfternoon;
+  },
+
+  // 交易时段（含连续竞价与收盘集合竞价）
   isMarketOpen: () => {
       const cst = Time.getCST();
       const day = cst.getDay();
       if (day === 0 || day === 6) return false; // 周末
 
-      const h = cst.getHours();
-      const m = cst.getMinutes();
-      const t = h * 100 + m;
-
-      // 09:30 - 11:30
+      const t = Time.getHHMM(cst);
       const isMorning = t >= 930 && t <= 1130;
-      // 13:00 - 15:00
+      // 下午含 14:57-15:00 集合竞价
       const isAfternoon = t >= 1300 && t <= 1500;
 
       return isMorning || isAfternoon;

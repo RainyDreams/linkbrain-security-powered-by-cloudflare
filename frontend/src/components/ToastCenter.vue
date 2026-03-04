@@ -14,7 +14,6 @@
             <span>{{ formatClock(item.createdAt) }}</span>
           </div>
           <p v-if="item.message">{{ item.message }}</p>
-          <p v-if="item.hint" class="toast-hint">建议：{{ item.hint }}</p>
           <div class="toast-foot">
             <span v-if="item.code" class="toast-code">Code {{ item.code }}</span>
             <button @click="dismissNotice(item.id)">关闭</button>
@@ -82,7 +81,7 @@ const formatClock = (ts: number) => {
   grid-template-columns: auto 1fr;
   gap: 10px;
   border: 1px solid var(--line);
-  border-radius: 12px;
+  border-radius: var(--radius-md);
   background: #fff;
   padding: 10px;
   box-shadow: 0 10px 24px rgba(8, 20, 38, 0.15);
@@ -97,7 +96,7 @@ const formatClock = (ts: number) => {
 }
 
 .toast-info {
-  border-color: #b2ddff;
+  border-color: #a7f3d0;
 }
 
 .toast-warning {
@@ -127,8 +126,8 @@ const formatClock = (ts: number) => {
 }
 
 .icon-info {
-  color: #175cd3;
-  background: #eff8ff;
+  color: #0f766e;
+  background: #f0fdf4;
 }
 
 .icon-warning {
@@ -166,13 +165,6 @@ const formatClock = (ts: number) => {
   line-height: 1.5;
 }
 
-.toast-hint {
-  background: #f7f9fc;
-  border: 1px dashed var(--line);
-  border-radius: 8px;
-  padding: 5px 7px;
-}
-
 .toast-foot {
   margin-top: 7px;
   display: flex;
@@ -185,7 +177,7 @@ const formatClock = (ts: number) => {
   font-size: 11px;
   color: var(--text-muted);
   border: 1px solid var(--line);
-  border-radius: 999px;
+  border-radius: var(--radius-sm);
   padding: 2px 8px;
 }
 

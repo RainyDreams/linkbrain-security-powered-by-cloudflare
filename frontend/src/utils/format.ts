@@ -74,5 +74,5 @@ export const isTradingSession = () => {
   const hh = Number(parts.find((x) => x.type === 'hour')?.value || '0');
   const mm = Number(parts.find((x) => x.type === 'minute')?.value || '0');
   const t = hh * 100 + mm;
-  return (t >= 930 && t <= 1130) || (t >= 1300 && t <= 1500);
+  return (t >= 930 && t <= 1130) || (t >= 1300 && t < 1457);
 };

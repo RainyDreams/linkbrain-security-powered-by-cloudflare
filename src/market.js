@@ -1,87 +1,93 @@
-/**
- * 猜测股票前缀
- */
-const getFullSymbol = (code) => {
-  if (typeof code !== 'string') return '';
-  const normalized = code.trim().toLowerCase();
-  if (/^(sh|sz)\d{6}$/.test(normalized)) return normalized;
-  code = normalized;
-  if (code.length !== 6) return code;
-  // 6开头为上证，5开头为基金/ETF，通常归于上海
-  if (code.startsWith('6') || code.startsWith('5')) return `sh${code}`;
-  // 00, 30, 15, 16 等归于深圳
-  return `sz${code}`;
+const A_SHARE_SYMBOL_RE = /^(sh|sz|bj)\d{6}$/;
+
+const normalizeSymbol = (code) => {
+    if (typeof code !== 'string') return '';
+    const normalized = code.trim().toLowerCase();
+    if (A_SHARE_SYMBOL_RE.test(normalized)) return normalized;
+    if (!/^\d{6}$/.test(normalized)) return '';
+    if (normalized.startsWith('8') || normalized.startsWith('4')) return `bj${normalized}`;
+    if (normalized.startsWith('6') || normalized.startsWith('5') || normalized.startsWith('9')) return `sh${normalized}`;
+    return `sz${normalized}`;
 };
 
-/**
-* 通用获取并解码 GBK 文本的方法
-*/
-const fetchRawText = async (url) => {
-  try {
-      const resp = await fetch(url, {
-          headers: { "Referer": "https://finance.sina.com.cn/" }
-      });
-      if (!resp.ok) return null;
-      const buffer = await resp.arrayBuffer();
-      return new TextDecoder("gbk").decode(buffer);
-  } catch (e) {
-      return null;
-  }
+const fetchRawTextGbk = async (url, referer) => {
+    try {
+        const resp = await fetch(url, {
+            headers: {
+                Referer: referer
+            }
+        });
+        if (!resp.ok) return null;
+        const buffer = await resp.arrayBuffer();
+        return new TextDecoder('gbk').decode(buffer);
+    } catch {
+        return null;
+    }
 };
 
-/**
-* 解析新浪数据
-* 格式: var hq_str_sh600519="贵州茅台,开盘,昨收,现价,...";
-*/
 const parseSinaData = (text) => {
-  const match = text.match(/="([^"]+)"/);
-  if (!match) return null;
-  const data = match[1].split(',');
-  if (data.length < 4) return null;
-  const price = parseFloat(data[3]);
-  const prevClose = parseFloat(data[2]);
-  return price > 0 ? { name: data[0], price, prevClose: prevClose > 0 ? prevClose : null } : null;
+    const match = String(text || '').match(/="([^"]+)"/);
+    if (!match) return null;
+    const data = match[1].split(',');
+    if (data.length < 4) return null;
+
+    const name = String(data[0] || '').trim();
+    const price = Number.parseFloat(data[3]);
+    const prevClose = Number.parseFloat(data[2]);
+    if (!Number.isFinite(price) || price <= 0) return null;
+
+    return {
+        name,
+        price,
+        prevClose: Number.isFinite(prevClose) && prevClose > 0 ? prevClose : null
+    };
 };
 
-/**
-* 解析腾讯数据
-* 格式: v_sh600519="1~贵州茅台~600519~1600.00~...~";
-*/
 const parseTencentData = (text) => {
-  const match = text.match(/="([^"]+)"/);
-  if (!match) return null;
-  const data = match[1].split('~');
-  if (data.length < 5) return null;
-  // 腾讯接口索引1是名字，3是当前价
-  const price = parseFloat(data[3]);
-  const prevClose = parseFloat(data[4]);
-  return price > 0 ? { name: data[1], price, prevClose: prevClose > 0 ? prevClose : null } : null;
+    const match = String(text || '').match(/="([^"]+)"/);
+    if (!match) return null;
+    const data = match[1].split('~');
+    if (data.length < 5) return null;
+
+    const name = String(data[1] || '').trim();
+    const price = Number.parseFloat(data[3]);
+    const prevClose = Number.parseFloat(data[4]);
+    if (!Number.isFinite(price) || price <= 0) return null;
+
+    return {
+        name,
+        price,
+        prevClose: Number.isFinite(prevClose) && prevClose > 0 ? prevClose : null
+    };
 };
 
-/**
-* 从多源获取实时行情（带降级逻辑）
-* @param {string} symbolOrCode 
-*/
 export const fetchStockPrice = async (symbolOrCode) => {
-  const symbol = getFullSymbol(symbolOrCode);
-  if (!symbol || !/^(sh|sz)\d{6}$/.test(symbol)) return null;
-  
-  // --- 尝试第一源：新浪 ---
-  const sinaUrl = `https://hq.sinajs.cn/list=${symbol}`;
-  const sinaRaw = await fetchRawText(sinaUrl);
-  if (sinaRaw) {
-      const result = parseSinaData(sinaRaw);
-      if (result) return { ...result, symbol, source: 'sina' };
-  }
+    const symbol = normalizeSymbol(symbolOrCode);
+    if (!symbol || !A_SHARE_SYMBOL_RE.test(symbol)) return null;
 
-  // --- 降级到第二源：腾讯 ---
-  console.warn(`Sina API failed for ${symbol}, falling back to Tencent...`);
-  const tencentUrl = `https://qt.gtimg.cn/q=${symbol}`;
-  const tencentRaw = await fetchRawText(tencentUrl);
-  if (tencentRaw) {
-      const result = parseTencentData(tencentRaw);
-      if (result) return { ...result, symbol, source: 'tencent' };
-  }
+    const sinaRaw = await fetchRawTextGbk(`https://hq.sinajs.cn/list=${symbol}`, 'https://finance.sina.com.cn/');
+    if (sinaRaw) {
+        const parsed = parseSinaData(sinaRaw);
+        if (parsed) {
+            return {
+                ...parsed,
+                symbol,
+                source: 'sina'
+            };
+        }
+    }
 
-  return null;
+    const tencentRaw = await fetchRawTextGbk(`https://qt.gtimg.cn/q=${symbol}`, 'https://qt.gtimg.cn/');
+    if (tencentRaw) {
+        const parsed = parseTencentData(tencentRaw);
+        if (parsed) {
+            return {
+                ...parsed,
+                symbol,
+                source: 'tencent'
+            };
+        }
+    }
+
+    return null;
 };
