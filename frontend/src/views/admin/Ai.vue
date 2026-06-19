@@ -800,6 +800,29 @@ onUnmounted(() => {
   toggleBodyScroll(false);
 });
 
+const pollRunUntilDone = async (taskId: string, _reason: string): Promise<string> => {
+  const startedAt = Date.now();
+  const timeoutMs = 180000;
+  const intervalMs = 2500;
+  while (Date.now() - startedAt < timeoutMs) {
+    await sleep(intervalMs);
+    try {
+      const task: any = await api.getAiTasks({
+        page: 1,
+        page_size: 20,
+        include_result: 1
+      });
+      const match = (task?.items || []).find((x: any) => x?.task_id === taskId);
+      if (match && (match.status === 'DONE' || match.status === 'FAILED')) {
+        return String(match?.result?.run_id || '');
+      }
+    } catch {
+      // ignore transient errors
+    }
+  }
+  return '';
+};
+
 const startManualDiscussion = async () => {
   running.value = true;
   try {
@@ -811,14 +834,17 @@ const startManualDiscussion = async () => {
       manual_request: true,
       review_only: true
     });
-    const inBackground = result?.queued_only === true || result?.execute_via === 'cron' || result?.executed === false;
+    const taskId = String(result?.task_id || '');
     notifyInfo(
-      inBackground ? '已发起人工讨论，已入队等待 cron 执行' : '已发起人工讨论（不计入自动配额）',
-      `task_id: ${result?.task_id || '--'}`
+      '已发起人工讨论（不计入自动配额）',
+      `task_id: ${taskId || '--'}，后台执行中，完成后自动打开详情`
     );
-    const runId = result?.run?.run_id || result?.task?.result?.run_id || '';
     await refreshAll();
-    if (runId) await openRunDetail(runId);
+    if (taskId) {
+      const runId = await pollRunUntilDone(taskId, 'review');
+      await refreshAll();
+      if (runId) await openRunDetail(runId);
+    }
   } catch {
     // Interceptor already shows normalized API errors.
   } finally {
@@ -837,19 +863,35 @@ const startManualExecute = async () => {
       manual_request: true,
       execution_mode: 'AUTO_EXECUTE'
     });
-    const inBackground = result?.queued_only === true || result?.execute_via === 'cron' || result?.executed === false;
-    (inBackground ? notifyInfo : notifySuccess)(
-      inBackground ? '已触发系统执行，已入队等待 cron 执行' : '已触发系统执行（委托下单）',
-      `task_id: ${result?.task_id || '--'}`
+    const taskId = String(result?.task_id || '');
+    notifyInfo(
+      '已触发系统执行（委托下单）',
+      `task_id: ${taskId || '--'}，后台执行中，完成后自动打开详情`
     );
-    const runId = result?.run?.run_id || result?.task?.result?.run_id || '';
     await refreshAll();
-    if (runId) await openRunDetail(runId);
+    if (taskId) {
+      const runId = await pollRunUntilDone(taskId, 'execute');
+      await refreshAll();
+      if (runId) await openRunDetail(runId);
+    }
   } catch {
     // Interceptor already shows normalized API errors.
   } finally {
     running.value = false;
   }
+};
+
+const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, Math.max(0, ms)));
+
+const pickRunIdFromResult = (result: any): string => {
+  if (!result) return '';
+  return String(
+    result?.run_id
+    || result?.run?.run_id
+    || result?.task?.result?.run_id
+    || result?.task?.run_id
+    || ''
+  );
 };
 
 const togglePending = (id: number, checked: boolean) => {

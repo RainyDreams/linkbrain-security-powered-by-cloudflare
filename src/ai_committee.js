@@ -368,10 +368,17 @@ const extractSymbolsFromNewsItems = (newsItems) => {
     const found = [];
     const addFromText = (text) => {
         if (!text) return;
-        const matches = String(text).match(/(?:sh|sz|bj)\d{6}|\b\d{6}\b/gi) || [];
-        for (const m of matches) {
+        const raw = String(text);
+        const prefixed = raw.match(/(?:sh|sz|bj)\d{6}/gi) || [];
+        for (const m of prefixed) {
+            const lower = m.toLowerCase();
+            if (unique(found).includes(lower)) continue;
+            found.push(lower);
+        }
+        const bareMatches = raw.match(/(?<![0-9])[0-9]{6}(?![0-9])/g) || [];
+        for (const m of bareMatches) {
             const symbol = inferAshareSymbol(m);
-            if (symbol) found.push(symbol);
+            if (symbol && !found.includes(symbol)) found.push(symbol);
         }
     };
     for (const item of newsItems || []) {
@@ -414,9 +421,15 @@ const fetchHotSymbolsFromStockInterface = async (env) => {
 
 const loadStockCandidates = async (env, refresh = false) => {
     const now = Date.now();
+    const cstDate = Time.formatCSTDate();
     if (!refresh) {
         const cached = safeJsonParse(await getMetaValue(env, META_KEYS.STOCK_CANDIDATE_CACHE), null);
-        if (cached?.at && (now - Number(cached.at)) < 120000 && Array.isArray(cached.symbols)) {
+        if (
+            cached?.at
+            && cached?.cst_date === cstDate
+            && (now - Number(cached.at)) < 120000
+            && Array.isArray(cached.symbols)
+        ) {
             return cached.symbols;
         }
     }
@@ -425,6 +438,7 @@ const loadStockCandidates = async (env, refresh = false) => {
         if (symbols.length > 0) {
             await setMetaValue(env, META_KEYS.STOCK_CANDIDATE_CACHE, safeJsonStringify({
                 at: now,
+                cst_date: cstDate,
                 symbols
             }));
             return symbols;
@@ -440,7 +454,12 @@ const loadStockCandidates = async (env, refresh = false) => {
         });
     }
     const fallback = safeJsonParse(await getMetaValue(env, META_KEYS.STOCK_CANDIDATE_CACHE), null);
-    return Array.isArray(fallback?.symbols) ? fallback.symbols : [];
+    if (Array.isArray(fallback?.symbols)) {
+        if (!fallback?.cst_date || fallback.cst_date === cstDate) {
+            return fallback.symbols;
+        }
+    }
+    return [];
 };
 
 const normalizeGeminiModel = (value) => String(value || '').trim().toLowerCase();
@@ -861,9 +880,15 @@ const dedupeNewsItems = (items = []) => {
 
 const loadRssItems = async (env, config, cst, refresh = false) => {
     const now = Date.now();
+    const cstDate = Time.formatCSTDate(cst);
     if (!refresh) {
         const cached = safeJsonParse(await getMetaValue(env, META_KEYS.RSS_CACHE), null);
-        if (cached?.at && (now - Number(cached.at)) < 120000 && Array.isArray(cached.items)) {
+        if (
+            cached?.at
+            && cached?.cst_date === cstDate
+            && (now - Number(cached.at)) < 120000
+            && Array.isArray(cached.items)
+        ) {
             return cached.items;
         }
     }
@@ -903,6 +928,7 @@ const loadRssItems = async (env, config, cst, refresh = false) => {
     if (items.length > 0) {
         await setMetaValue(env, META_KEYS.RSS_CACHE, safeJsonStringify({
             at: now,
+            cst_date: cstDate,
             items
         }));
         return items;
@@ -1266,7 +1292,7 @@ const callGeminiJson = async (env, role, systemPrompt, payload, temperature = 0.
         err.details = [{
             model: earliest.model,
             status: 429,
-            message: 'all models cooling down',
+            message: `gemini models cooling down (cooldown_ms=${waitMs})`,
             cooldown_ms: waitMs
         }];
         throw err;
@@ -1468,7 +1494,9 @@ const safeRoleCall = async (env, role, prompt, payload, fallback, temperature = 
         const lastStatus = Number(lastDetail?.status || 0);
         const lastMessageRaw = String(lastDetail?.message || '');
         const lastMessage = lastStatus === 429
-            ? 'gemini_api_rate_limited'
+            ? (String(error?.kind || '') === 'gemini_models_cooling_down'
+                ? 'gemini_models_cooling_down'
+                : 'gemini_api_rate_limited')
             : lastMessageRaw.replace(/quota[_\s-]*exhausted/gi, 'internal_budget_advisory_exceeded');
         return {
             ok: false,
@@ -2229,14 +2257,18 @@ const evaluateAtomicPrecheck = (executionSummary = {}) => {
 };
 
 const applyPenalty = async (env, config, performance, executionSummary) => {
-    const failRate = executionSummary.attempted > 0
-        ? (executionSummary.failed / executionSummary.attempted)
-        : 0;
+    const attempted = Number(executionSummary?.attempted || 0);
+    const failed = Number(executionSummary?.failed || 0);
+    const failRate = attempted > 0 ? (failed / attempted) : 0;
 
     let delta = 0;
-    if (performance.day_pnl_pct <= -0.8 || (executionSummary.attempted >= 2 && failRate >= 0.6)) {
+    if (attempted <= 0) {
+        delta = 0;
+    } else if (failed > 0 && failRate >= 0.6) {
         delta = 1;
-    } else if (performance.day_pnl_pct >= 0.8 && executionSummary.failed === 0) {
+    } else if (performance.day_pnl_pct <= -0.8) {
+        delta = 1;
+    } else if (performance.day_pnl_pct >= 0.8 && failed === 0) {
         delta = -1;
     }
 

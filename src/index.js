@@ -14,6 +14,7 @@ import {
     getAiTasks,
     queueAiTask,
     rejectAiPendingActions,
+    runQueuedTaskById,
     setAiPrompt,
     updateAiConfig
 } from './ai_committee.js';
@@ -1288,7 +1289,7 @@ export default {
             }
 
             if (url.pathname.startsWith('/api/admin/')) {
-                if (!verifyAuth(request, env)) {
+                if (!await verifyAuth(request, env)) {
                     return await auditErrorResponse(env, request, 'Unauthorized', 401, 4010, {}, 'admin.auth');
                 }
 
@@ -1636,10 +1637,36 @@ export default {
                     };
 
                     try {
+                        const wantsImmediate = body.immediate === true;
+                        if (wantsImmediate) {
+                            const queued = await queueAiTask(env, payload);
+                            if (ctx?.waitUntil) {
+                                ctx.waitUntil((async () => {
+                                    try {
+                                        await runQueuedTaskById(env, queued.task_id);
+                                    } catch (e) {
+                                        await logError(env, e, { task_id: queued.task_id, trigger: 'inline' }, 'ai.task.inline');
+                                    }
+                                })());
+                            } else {
+                                await runQueuedTaskById(env, queued.task_id);
+                            }
+                            return jsonResponse({
+                                ...queued,
+                                immediate: true,
+                                executed: false,
+                                queued_only: true,
+                                execute_via: ctx?.waitUntil ? 'inline' : 'cron',
+                                message: ctx?.waitUntil
+                                    ? 'task accepted, executing inline in background; poll tasks/runs for status'
+                                    : 'task accepted, executing inline; poll tasks/runs for status'
+                            });
+                        }
+
                         const queued = await queueAiTask(env, payload);
                         return jsonResponse({
                             ...queued,
-                            immediate: body.immediate === true,
+                            immediate: false,
                             executed: false,
                             queued_only: true,
                             execute_via: 'cron',

@@ -427,9 +427,13 @@ export const placeOrder = async (env, body) => {
             }
 
             return jsonResponse({
-                message: queuedByCage ? '委托已暂存，待价格回落至笼子区间后再撮合' : '委托已提交',
+                message: queuedByCage
+                    ? '委托已暂存，待价格回落至笼子区间后再撮合（北交所笼子外可暂存模式）'
+                    : '委托已提交',
                 board,
                 cage_queued: queuedByCage,
+                cage_mode: cage?.mode || 'NONE',
+                cage_reason: cage?.reason || '',
                 status: 'PENDING',
                 order_id: createdOrderId
             });

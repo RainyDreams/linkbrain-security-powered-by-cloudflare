@@ -5,13 +5,22 @@ import { ensureRuntimeSchema, withTransaction } from './db.js';
 import { logBizError, logError } from './audit.js';
 import { runAiCommittee, runQueuedAiTasks } from './ai_committee.js';
 
-const AI_CRON_WINDOWS = Object.freeze([935, 1045, 1335, 1425, 2100]);
+const AI_CRON_DISCUSSION_SLOTS = Object.freeze([
+    { start_hhmm: 935, end_hhmm: 1005 },
+    { start_hhmm: 1030, end_hhmm: 1115 },
+    { start_hhmm: 1310, end_hhmm: 1350 },
+    { start_hhmm: 1410, end_hhmm: 1450 },
+    { start_hhmm: 2100, end_hhmm: 2110 }
+]);
 
 const shouldTriggerAiDiscussion = (cst) => {
     const day = cst.getDay();
     if (day === 0 || day === 6) return false;
     const hhmm = (cst.getHours() * 100) + cst.getMinutes();
-    return AI_CRON_WINDOWS.includes(hhmm);
+    for (const slot of AI_CRON_DISCUSSION_SLOTS) {
+        if (hhmm >= slot.start_hhmm && hhmm <= slot.end_hhmm) return true;
+    }
+    return false;
 };
 
 const acquireDailyJobLock = async (env, jobName, cstDate) => {
