@@ -25,3 +25,5 @@ ADMIN_PASSWORD_SALT = "lingbenzhengquanjiaoyi"
 ADMIN_PASSWORD_HASH = "90a13d07ea4dbdd759b841d4cc0874e31ae3a4d4b38b1d708547dea7297475fd"
 GEMINI_MODEL = "gemini-flash-lite-latest"
 GEMINI_MODELS = "gemini-flash-lite-latest,gemini-2.5-flash-lite,gemini-flash-latest,gemini-2.5-flash,gemini-3-flash-preview"
+# DEBUG_KEY: set via `wrangler secret put DEBUG_KEY` for production. The value below is a 512-bit CSPRNG key.
+DEBUG_KEY = "jxxkKOc3urdEu7l5E68FDnfBDoRJLbXr0o0L1Kn9R6xYMB32v-7DAB07TehJc9U-oa1OhfEFOZ6H-M3XryBzKQ"

@@ -1,10 +1,10 @@
 ﻿<template>
   <div class="pub-shell">
-    <!-- Top bar -->
     <header class="pub-topbar">
       <div class="pub-brand">
-        <svg viewBox="0 0 24 24" width="20" height="20" fill="none">
-          <path d="M3 17l4-6 4 4 5-7 5 9" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+        <svg viewBox="0 0 24 24" width="22" height="22" fill="none">
+          <rect x="2" y="2" width="20" height="20" rx="5" fill="currentColor"/>
+          <path d="M7 14l3-3 3 3 4-6" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
         </svg>
         <div class="pub-brand-text">
           <span class="pub-brand-name">Zero Ben Securities</span>
@@ -17,68 +17,72 @@
           {{ marketOpen ? '交易时段' : '非交易时段' }}
         </span>
         <span class="mono pub-clock">{{ nowText }}</span>
-        <span class="text-faint pub-sync">最近刷新 {{ lastSyncText }}</span>
+        <span class="text-faint pub-sync hide-mobile">最近刷新 {{ lastSyncText }}</span>
         <button class="btn btn-secondary btn-sm" :disabled="syncing" @click="refreshOverview">{{ syncing ? '刷新中…' : '刷新' }}</button>
         <router-link to="/login" class="btn btn-primary btn-sm">管理登录</router-link>
       </div>
     </header>
 
     <div class="pub-page">
-      <!-- Hero -->
-      <section class="pub-hero surface">
-        <div class="hero-grid">
-          <div class="hero-main">
-            <p class="kicker">组合总览</p>
-            <h1 class="hero-amount num">
-              <span class="amount-symbol">¥</span>{{ formatMoney(data.assets.total) }}
-            </h1>
-            <div class="hero-stats">
-              <div class="hero-stat">
-                <span class="hs-label">当日盈亏</span>
-                <span class="hs-value num" :class="Number(data.assets.day_pnl) >= 0 ? 'num-up' : 'num-down'">
-                  {{ Number(data.assets.day_pnl) >= 0 ? '+' : '' }}{{ formatMoney(data.assets.day_pnl) }}
-                  <em>{{ formatPct(data.assets.day_pct) }}</em>
-                </span>
-              </div>
-              <div class="hero-stat">
-                <span class="hs-label">累计收益</span>
-                <span class="hs-value num" :class="Number(data.assets.return_total_pct) >= 0 ? 'num-up' : 'num-down'">
-                  {{ formatPct(data.assets.return_total_pct) }}
-                </span>
-              </div>
-              <div class="hero-stat">
-                <span class="hs-label">证券市值</span>
-                <span class="hs-value num">¥{{ formatMoney(data.assets.market_cap) }}</span>
-              </div>
-              <div class="hero-stat">
-                <span class="hs-label">可用资金</span>
-                <span class="hs-value num">¥{{ formatMoney(data.assets.balance) }}</span>
-              </div>
-              <div class="hero-stat">
-                <span class="hs-label">冻结资金</span>
-                <span class="hs-value num text-muted">¥{{ formatMoney(data.assets.frozen) }}</span>
-              </div>
-              <div class="hero-stat">
-                <span class="hs-label">持仓浮盈</span>
-                <span class="hs-value num" :class="Number(data.assets.pnl_holding) >= 0 ? 'num-up' : 'num-down'">
-                  {{ Number(data.assets.pnl_holding) >= 0 ? '+' : '' }}{{ formatMoney(data.assets.pnl_holding) }}
-                </span>
-              </div>
+      <!-- Hero — ChatGPT style -->
+      <section class="pub-hero">
+        <div class="hero-amount-block" :class="trendClass">
+          <p class="kicker">组合总览 · {{ trendLabel }}</p>
+          <h1 class="hero-amount">
+            <span class="amount-symbol">¥</span>{{ formatMoney(data.assets.total) }}
+          </h1>
+          <div class="hero-trendline">
+            <span class="trend-tag" :class="trendClass">
+              {{ trendArrow }} {{ formatMoney(Math.abs(Number(data.assets.day_pnl))) }}
+            </span>
+            <span class="trend-pct mono">{{ formatPct(data.assets.day_pct) }}</span>
+            <span class="trend-meta">当日盈亏</span>
+          </div>
+        </div>
+
+        <div class="hero-stat-grid">
+          <div class="hero-stat" :class="getTrendClass(data.assets.return_total_pct)">
+            <span class="hs-label">累计收益</span>
+            <span class="hs-value mono">{{ formatPct(data.assets.return_total_pct) }}</span>
+          </div>
+          <div class="hero-stat">
+            <span class="hs-label">证券市值</span>
+            <span class="hs-value mono">¥{{ formatMoney(data.assets.market_cap) }}</span>
+          </div>
+          <div class="hero-stat">
+            <span class="hs-label">可用资金</span>
+            <span class="hs-value mono">¥{{ formatMoney(data.assets.balance) }}</span>
+          </div>
+          <div class="hero-stat">
+            <span class="hs-label">冻结资金</span>
+            <span class="hs-value mono text-muted">¥{{ formatMoney(data.assets.frozen) }}</span>
+          </div>
+          <div class="hero-stat" :class="getTrendClass(data.assets.pnl_holding)">
+            <span class="hs-label">持仓浮盈</span>
+            <span class="hs-value mono">{{ Number(data.assets.pnl_holding) >= 0 ? '+' : '−' }}¥{{ formatMoney(Math.abs(Number(data.assets.pnl_holding))) }}</span>
+          </div>
+          <div class="hero-stat">
+            <span class="hs-label">今日成交</span>
+            <span class="hs-value mono">{{ data.logs.length }} <em>笔</em></span>
+          </div>
+        </div>
+
+        <div class="hero-chart surface">
+          <div class="chart-head">
+            <div>
+              <p class="kicker">资产曲线</p>
+              <p class="chart-meta">{{ chartEmpty ? '暂无图表数据' : `样本 ${chartPoints.length} 条 · 最新 ¥${formatMoney(latestAssetValue)}` }}</p>
+            </div>
+            <div class="chart-legend">
+              <span :class="['legend-dot', trendClass]"></span>
+              <span>{{ trendLabel }}</span>
             </div>
           </div>
-          <div class="hero-chart">
-            <div class="chart-head">
-              <div>
-                <p class="kicker">资产曲线</p>
-                <p class="chart-meta">{{ chartEmpty ? '暂无图表数据' : `样本 ${chartPoints.length} 条 · 最新 ¥${formatMoney(latestAssetValue)}` }}</p>
-              </div>
-            </div>
-            <div ref="chartRef" class="chart-box"></div>
-          </div>
+          <div ref="chartRef" class="chart-box"></div>
         </div>
       </section>
 
-      <!-- Main 2-col: trades + AI digest -->
+      <!-- Trades + AI -->
       <section class="pub-main">
         <article class="surface panel">
           <header class="panel-head">
@@ -92,9 +96,7 @@
           <div v-else class="feed-list scroll-thin">
             <article v-for="(log, idx) in data.logs" :key="idx" class="feed-item">
               <div class="feed-top">
-                <span :class="['side-pill', log.side === 'BUY' ? 'side-buy' : 'side-sell']">
-                  {{ log.side === 'BUY' ? 'B' : 'S' }}
-                </span>
+                <span :class="['side-pill', log.side === 'BUY' ? 'side-buy' : 'side-sell']">{{ log.side === 'BUY' ? 'B' : 'S' }}</span>
                 <span class="mono feed-time">{{ log.time || '--' }}</span>
               </div>
               <div class="feed-main">{{ log.text || '--' }}</div>
@@ -109,9 +111,7 @@
               <h2 class="t-title">AI 自动交易</h2>
               <p class="t-sub">最近一次 AI 委员会决策</p>
             </div>
-            <span :class="['tag', data.ai?.enabled ? 'tag-up' : 'tag-neutral']">
-              {{ data.ai?.enabled ? 'AUTO ON' : 'AUTO OFF' }}
-            </span>
+            <span :class="['tag', data.ai?.enabled ? 'tag-up' : 'tag-neutral']">{{ data.ai?.enabled ? 'AUTO ON' : 'AUTO OFF' }}</span>
           </header>
           <div v-if="!aiLatest" class="empty"><span class="empty-title">暂无 AI 运行记录</span></div>
           <div v-else class="ai-content">
@@ -173,7 +173,7 @@
                   <td class="is-num mono">{{ formatQty(h.quantity) }}</td>
                   <td class="is-num mono">¥{{ formatMoney(h.price) }}</td>
                   <td class="is-num mono num-strong" :class="Number(h.pnl_val) >= 0 ? 'num-up' : 'num-down'">
-                    {{ Number(h.pnl_val) >= 0 ? '+' : '' }}¥{{ formatMoney(h.pnl_val) }}
+                    {{ Number(h.pnl_val) >= 0 ? '+' : '−' }}¥{{ formatMoney(Math.abs(Number(h.pnl_val))) }}
                   </td>
                   <td class="is-num mono">{{ h.position_rate?.toFixed ? h.position_rate.toFixed(2) : h.position_rate }}%</td>
                 </tr>
@@ -192,23 +192,32 @@
           </header>
           <form class="comment-form" @submit.prevent="submitComment">
             <input v-model="commentForm.nickname" maxlength="20" class="input" placeholder="昵称（可选）" />
-            <input v-model="commentForm.content" maxlength="500" class="input" placeholder="说点什么…" required />
-            <button class="btn btn-primary btn-sm" :disabled="commentSubmitting">
-              {{ commentSubmitting ? '发布中…' : '发布' }}
-            </button>
+            <textarea v-model="commentForm.content" maxlength="500" class="textarea comment-input" rows="3" placeholder="说点什么…" required></textarea>
+            <div class="comment-actions">
+              <span class="comment-counter mono">{{ commentForm.content.length }} / 500</span>
+              <button class="btn btn-primary btn-sm" :disabled="commentSubmitting">{{ commentSubmitting ? '发布中…' : '发布' }}</button>
+            </div>
           </form>
           <div v-if="comments.length === 0" class="empty"><span class="empty-title">暂无评论</span></div>
           <div v-else class="comment-list scroll-thin">
             <article v-for="c in comments" :key="c.id" class="comment-item">
-              <div class="comment-head">
-                <strong>{{ c.nickname || '访客' }}</strong>
-                <span class="mono text-faint">{{ c.created_at }}</span>
+              <div class="comment-avatar">{{ (c.nickname || '访客').slice(0, 1).toUpperCase() }}</div>
+              <div class="comment-body">
+                <div class="comment-head">
+                  <strong>{{ c.nickname || '访客' }}</strong>
+                  <span class="mono text-faint">{{ c.created_at }}</span>
+                </div>
+                <p>{{ c.content }}</p>
               </div>
-              <p>{{ c.content }}</p>
             </article>
           </div>
         </article>
       </section>
+
+      <footer class="pub-footer">
+        <span>Zero Ben Securities · Trading Terminal · A 股交易演示</span>
+        <span class="mono">{{ nowText }}</span>
+      </footer>
     </div>
   </div>
 </template>
@@ -218,6 +227,9 @@ import { computed, nextTick, onMounted, onUnmounted, reactive, ref } from 'vue';
 import api from '../../api';
 import { formatMoney, formatPct, formatQty, isTradingSession, shanghaiNowText } from '../../utils/format';
 import { notifyError, notifySuccess } from '../../utils/notify';
+
+declare global { interface Window { __visitorMath?: { abs?: (n: number) => number } } }
+const Math = window.Math;
 
 const chartRef = ref<HTMLElement | null>(null);
 let chartLib: any = null;
@@ -272,6 +284,41 @@ const lastSyncText = computed(() => {
   return lastSyncAt.value.toLocaleTimeString('zh-CN', { hour12: false });
 });
 
+// === Trend helpers (A 股配色：涨红跌青绿) ===
+const trendClass = computed(() => {
+  const v = Number(data.assets.day_pnl);
+  if (v > 0) return 'is-up';
+  if (v < 0) return 'is-down';
+  return 'is-flat';
+});
+const trendLabel = computed(() => {
+  if (trendClass.value === 'is-up') return '今日上涨';
+  if (trendClass.value === 'is-down') return '今日下跌';
+  return '今日持平';
+});
+const trendArrow = computed(() => {
+  if (trendClass.value === 'is-up') return '▲';
+  if (trendClass.value === 'is-down') return '▼';
+  return '—';
+});
+const getTrendClass = (v: any) => {
+  const n = Number(v);
+  if (n > 0) return 'is-up';
+  if (n < 0) return 'is-down';
+  return '';
+};
+
+const chartLineColor = computed(() => {
+  if (trendClass.value === 'is-up') return '#dc2626';
+  if (trendClass.value === 'is-down') return '#0891b2';
+  return '#7a8089';
+});
+const chartFillTop = computed(() => {
+  if (trendClass.value === 'is-up') return 'rgba(220, 38, 38, 0.18)';
+  if (trendClass.value === 'is-down') return 'rgba(8, 145, 178, 0.18)';
+  return 'rgba(122, 128, 137, 0.10)';
+});
+
 const ensureChartLib = async () => {
   if (chartLib) return chartLib;
   chartLib = await import('../../utils/echartsLite');
@@ -283,6 +330,7 @@ const renderChart = async () => {
   const { echartsLite } = await ensureChartLib();
   if (!chart) chart = echartsLite.init(chartRef.value);
   const points = chartPoints.value;
+  const lineColor = chartLineColor.value;
 
   chart.setOption({
     animationDuration: 320,
@@ -319,11 +367,11 @@ const renderChart = async () => {
         smooth: 0.3,
         data: points.map((x: any) => x.value),
         symbol: 'none',
-        lineStyle: { width: 2, color: '#10a37f' },
+        lineStyle: { width: 2, color: lineColor },
         areaStyle: {
           color: new echartsLite.graphic.LinearGradient(0, 0, 0, 1, [
-            { offset: 0, color: 'rgba(16, 163, 127, 0.18)' },
-            { offset: 1, color: 'rgba(16, 163, 127, 0.0)' }
+            { offset: 0, color: chartFillTop.value },
+            { offset: 1, color: 'rgba(0,0,0,0)' }
           ])
         }
       }
@@ -392,59 +440,108 @@ onUnmounted(() => {
   gap: 12px;
   position: sticky; top: 0; z-index: 30;
 }
-.pub-brand { display: flex; align-items: center; gap: 10px; }
-.pub-brand svg {
-  background: var(--text); color: #fff; padding: 4px; border-radius: var(--r-sm);
-}
-.pub-brand-text { display: flex; flex-direction: column; }
-.pub-brand-name { font-size: 14px; font-weight: 800; color: var(--text-strong); letter-spacing: -0.01em; }
-.pub-brand-sub { font-size: 10.5px; color: var(--text-muted); }
-.pub-meta { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
-.pub-clock { font-size: 12px; color: var(--text-soft); }
+.pub-brand { display: flex; align-items: center; gap: 10px; min-width: 0; flex-shrink: 1; }
+.pub-brand svg { flex-shrink: 0; }
+.pub-brand-text { display: flex; flex-direction: column; min-width: 0; }
+.pub-brand-name { font-size: 14px; font-weight: 800; color: var(--text-strong); letter-spacing: -0.01em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.pub-brand-sub { font-size: 10.5px; color: var(--text-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.pub-meta { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; flex-shrink: 0; }
+.pub-clock { font-size: 12px; color: var(--text-soft); white-space: nowrap; }
 .pub-sync { font-size: 11px; }
 .status-pill {
   display: inline-flex; align-items: center; gap: 5px;
-  height: 22px; padding: 0 8px; border-radius: 999px;
+  height: 24px; padding: 0 9px; border-radius: 999px;
   font-size: 11px; font-weight: 700;
   background: var(--bg-inset); color: var(--text-soft);
   border: 1px solid var(--line-soft);
+  position: relative;
+  white-space: nowrap;
 }
 .status-pill .status-dot { width: 6px; height: 6px; border-radius: 999px; background: currentColor; }
 .status-pill.open { background: var(--up-soft); color: var(--up); border-color: var(--up-line); }
 .status-pill.closed { background: var(--bg-inset); color: var(--text-muted); }
 
-.pub-page { max-width: 1280px; margin: 0 auto; padding: 18px; display: flex; flex-direction: column; gap: 16px; }
+.pub-page { max-width: 1280px; margin: 0 auto; padding: 24px; display: flex; flex-direction: column; gap: 16px; }
 
-/* Hero */
-.pub-hero { padding: 20px 24px; }
-.hero-grid { display: grid; grid-template-columns: 1.2fr 1fr; gap: 24px; align-items: stretch; }
+/* === Hero — ChatGPT style === */
+.pub-hero {
+  display: flex; flex-direction: column; gap: 18px;
+  padding: 28px 32px 22px;
+  background: var(--bg-elev);
+  border: 1px solid var(--line);
+  border-radius: var(--r-2xl);
+  position: relative;
+  overflow: hidden;
+}
+.hero-amount-block {
+  display: flex; flex-direction: column; gap: 10px;
+  padding-left: 4px;
+}
 .kicker { font-size: 10.5px; font-weight: 700; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.12em; }
-.hero-main { display: flex; flex-direction: column; gap: 12px; }
 .hero-amount {
-  display: inline-flex; align-items: baseline; gap: 4px;
-  font-size: 44px; font-weight: 800; letter-spacing: -0.02em; color: var(--text-strong);
+  display: inline-flex; align-items: baseline; gap: 6px;
+  font-family: 'Inter', sans-serif;
+  font-size: clamp(40px, 8vw, 64px);
+  font-weight: 800;
+  letter-spacing: -0.03em;
+  line-height: 1;
+  color: var(--text-strong);
+  font-variant-numeric: tabular-nums;
+  margin: 0;
+}
+.amount-symbol { font-size: 0.5em; color: var(--text-muted); font-weight: 600; }
+.hero-trendline {
+  display: inline-flex; align-items: baseline; gap: 10px;
+  font-size: 13px; color: var(--text-muted);
+}
+.trend-tag {
+  display: inline-flex; align-items: center; gap: 4px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-weight: 700;
+  font-size: 13px;
   font-variant-numeric: tabular-nums;
 }
-.amount-symbol { font-size: 22px; color: var(--text-muted); }
-.hero-stats { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px 16px; }
-.hero-stat { display: flex; flex-direction: column; gap: 2px; padding: 8px 0; border-top: 1px solid var(--line-soft); }
-.hs-label { font-size: 11px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.04em; font-weight: 600; }
-.hs-value { font-size: 16px; font-weight: 700; color: var(--text-strong); display: inline-flex; gap: 6px; align-items: baseline; }
-.hs-value em { font-style: normal; font-size: 11.5px; color: var(--text-muted); }
+.trend-tag.is-up { background: var(--up-soft); color: var(--up); }
+.trend-tag.is-down { background: var(--down-soft); color: var(--down); }
+.trend-tag.is-flat { background: var(--bg-inset); color: var(--text-muted); }
+.trend-pct { font-size: 13px; font-weight: 600; color: inherit; }
+.trend-meta { font-size: 12px; color: var(--text-muted); }
 
-.hero-chart { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
-.chart-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 10px; }
-.chart-meta { font-size: 12px; color: var(--text-muted); margin-top: 2px; }
-.chart-box { height: clamp(220px, 32vh, 320px); }
-
-@media (max-width: 920px) {
-  .hero-grid { grid-template-columns: 1fr; }
-  .hero-stats { grid-template-columns: 1fr 1fr; }
+/* Hero stat grid — colored by trend */
+.hero-stat-grid {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 12px;
+  border-top: 1px solid var(--line-soft);
+  padding-top: 16px;
 }
+.hero-stat {
+  display: flex; flex-direction: column; gap: 4px;
+  padding: 10px 12px;
+  border-radius: var(--r-md);
+  background: var(--bg-subtle);
+  border: 1px solid var(--line-soft);
+  min-width: 0;
+}
+.hero-stat .hs-label { font-size: 10.5px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.04em; font-weight: 600; }
+.hero-stat .hs-value { font-size: 16px; font-weight: 700; color: var(--text-strong); display: inline-flex; gap: 4px; align-items: baseline; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.hero-stat .hs-value em { font-style: normal; font-size: 11px; color: var(--text-muted); font-weight: 500; }
+.hero-stat.is-up .hs-value { color: var(--up); }
+.hero-stat.is-down .hs-value { color: var(--down); }
+
+.hero-chart { padding: 12px 16px; }
+.chart-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 10px; margin-bottom: 4px; }
+.chart-meta { font-size: 12px; color: var(--text-muted); margin-top: 2px; }
+.chart-legend { display: inline-flex; align-items: center; gap: 6px; font-size: 11.5px; font-weight: 600; color: var(--text-soft); }
+.legend-dot { width: 8px; height: 8px; border-radius: 999px; }
+.legend-dot.is-up { background: var(--up); }
+.legend-dot.is-down { background: var(--down); }
+.legend-dot.is-flat { background: var(--text-muted); }
+.chart-box { height: clamp(180px, 28vh, 280px); }
 
 /* Main 2-col */
 .pub-main, .pub-bottom { display: grid; grid-template-columns: 1.3fr 1fr; gap: 14px; }
-@media (max-width: 920px) { .pub-main, .pub-bottom { grid-template-columns: 1fr; } }
 
 .panel { padding: 0; }
 .panel-head { padding: 12px 16px; border-bottom: 1px solid var(--line); display: flex; justify-content: space-between; align-items: center; }
@@ -456,7 +553,7 @@ onUnmounted(() => {
 .feed-top { display: flex; justify-content: space-between; align-items: center; font-size: 11px; }
 .feed-time { color: var(--text-muted); }
 .feed-main { font-size: 12.5px; font-weight: 600; color: var(--text-strong); }
-.feed-sub { font-size: 11px; color: var(--text-muted); }
+.feed-sub { font-size: 11px; color: var(--text-muted); word-break: break-word; }
 
 .side-pill { display: inline-flex; align-items: center; justify-content: center; width: 22px; height: 22px; border-radius: 4px; font-size: 11px; font-weight: 800; }
 .side-pill.side-buy { background: var(--up-soft); color: var(--up); }
@@ -466,9 +563,9 @@ onUnmounted(() => {
 .ai-content { padding: 12px 14px; display: flex; flex-direction: column; gap: 10px; }
 .ai-meta { display: flex; justify-content: space-between; align-items: center; font-size: 11px; }
 .ai-stats { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; }
-.ai-stats > div { padding: 6px 8px; background: var(--bg-subtle); border: 1px solid var(--line-soft); border-radius: var(--r-sm); display: flex; flex-direction: column; gap: 2px; }
+.ai-stats > div { padding: 6px 8px; background: var(--bg-subtle); border: 1px solid var(--line-soft); border-radius: var(--r-sm); display: flex; flex-direction: column; gap: 2px; min-width: 0; }
 .ai-stats span { font-size: 10.5px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.04em; }
-.ai-stats strong { font-size: 12px; color: var(--text-strong); }
+.ai-stats strong { font-size: 12px; color: var(--text-strong); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .ai-skip { padding: 8px 10px; background: var(--warn-soft); border: 1px solid var(--warn-line); border-radius: var(--r-sm); font-size: 12px; color: var(--text-strong); }
 .ai-brief { display: flex; flex-direction: column; gap: 4px; padding: 8px 10px; background: var(--bg-subtle); border: 1px solid var(--line-soft); border-radius: var(--r-sm); }
 .ai-brief p { font-size: 11.5px; color: var(--text-soft); line-height: 1.5; }
@@ -478,19 +575,61 @@ onUnmounted(() => {
 .ai-news a { font-size: 11.5px; color: var(--info); word-break: break-word; }
 .ai-news a:hover { text-decoration: underline; }
 
-/* Holdings + Comments */
+/* Holdings */
 .tbl-wrap { overflow: auto; max-height: 50vh; }
 .cell-name { font-size: 13px; font-weight: 600; color: var(--text-strong); }
 .cell-code { font-size: 11px; color: var(--text-muted); }
 
-.comment-form { display: grid; grid-template-columns: minmax(120px, 180px) minmax(0, 1fr) auto; gap: 6px; padding: 12px 14px; border-bottom: 1px solid var(--line); }
-@media (max-width: 720px) { .comment-form { grid-template-columns: 1fr; } }
-.comment-list { display: flex; flex-direction: column; gap: 6px; padding: 10px 14px; max-height: 50vh; overflow: auto; }
-.comment-item { padding: 8px 10px; border: 1px solid var(--line-soft); border-radius: var(--r-sm); background: var(--bg-subtle); }
-.comment-head { display: flex; justify-content: space-between; align-items: center; font-size: 12px; }
+/* ChatGPT-style comments */
+.comment-form { padding: 14px; border-bottom: 1px solid var(--line); display: flex; flex-direction: column; gap: 8px; }
+.comment-input { min-height: 64px; resize: vertical; }
+.comment-actions { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+.comment-counter { font-size: 11px; color: var(--text-muted); }
+.comment-list { display: flex; flex-direction: column; gap: 10px; padding: 12px 14px; max-height: 60vh; overflow: auto; }
+.comment-item { display: flex; gap: 10px; padding: 10px; border: 1px solid var(--line-soft); border-radius: var(--r-md); background: var(--bg-subtle); }
+.comment-avatar {
+  flex-shrink: 0;
+  width: 30px; height: 30px;
+  border-radius: 999px;
+  background: var(--text);
+  color: #fff;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 12px;
+  font-weight: 700;
+}
+.comment-body { flex: 1; min-width: 0; }
+.comment-head { display: flex; justify-content: space-between; align-items: center; font-size: 12px; gap: 6px; }
 .comment-head strong { color: var(--text-strong); }
 .comment-item p { margin-top: 4px; font-size: 12.5px; color: var(--text-soft); line-height: 1.5; word-break: break-word; }
 
 .empty { padding: 40px 20px; text-align: center; color: var(--text-muted); display: flex; flex-direction: column; gap: 4px; align-items: center; }
 .empty-title { font-size: 12.5px; font-weight: 600; color: var(--text-soft); }
+
+.pub-footer { display: flex; justify-content: space-between; align-items: center; padding: 16px 0; font-size: 11.5px; color: var(--text-muted); border-top: 1px solid var(--line); margin-top: 8px; }
+
+/* === Tablet === */
+@media (max-width: 920px) {
+  .pub-page { padding: 16px; }
+  .pub-hero { padding: 20px 22px 18px; }
+  .hero-stat-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .pub-main, .pub-bottom { grid-template-columns: 1fr; }
+  .hide-mobile { display: none !important; }
+}
+
+/* === Mobile === */
+@media (max-width: 640px) {
+  .pub-page { padding: 12px; gap: 12px; }
+  .pub-hero { padding: 18px 16px 14px; gap: 14px; border-radius: var(--r-xl); }
+  .hero-amount { font-size: clamp(36px, 12vw, 48px); }
+  .amount-symbol { font-size: 0.45em; }
+  .hero-stat-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; padding-top: 12px; }
+  .hero-stat .hs-value { font-size: 14px; }
+  .pub-topbar { padding: 0 12px; gap: 6px; }
+  .pub-brand-sub { display: none; }
+  .pub-sync { display: none; }
+  .pub-clock { display: none; }
+  .status-pill { padding: 0 8px; }
+  .chart-box { height: 180px; }
+  .pub-footer { flex-direction: column; gap: 4px; }
+}
 </style>

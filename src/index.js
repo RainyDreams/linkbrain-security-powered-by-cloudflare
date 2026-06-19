@@ -18,6 +18,12 @@ import {
     setAiPrompt,
     updateAiConfig
 } from './ai_committee.js';
+import {
+    handleDebugCleanupLogs,
+    handleDebugSimulateMatch,
+    handleDebugVerify,
+    isDebugEnabled
+} from './debug.js';
 
 const LOGIN_MAX_FAILURES = 5;
 const LOGIN_WINDOW_MS = 15 * 60 * 1000;
@@ -1286,6 +1292,23 @@ export default {
 
                 await recordLoginFailure(env, ip);
                 return await auditErrorResponse(env, request, '用户名或密码错误', 401, 4011, { ip }, 'auth.login');
+            }
+
+            // === Debug endpoints first — bypass admin auth, use X-Debug-Key header ===
+            if (url.pathname.startsWith('/api/admin/debug/')) {
+                if (url.pathname === '/api/admin/debug/verify') {
+                    return await handleDebugVerify(request, env);
+                }
+                if (url.pathname === '/api/admin/debug/status') {
+                    return jsonResponse({ enabled: isDebugEnabled(env) });
+                }
+                if (url.pathname === '/api/admin/debug/simulate-match') {
+                    return await handleDebugSimulateMatch(request, env, ctx);
+                }
+                if (url.pathname === '/api/admin/debug/cleanup-logs') {
+                    return await handleDebugCleanupLogs(request, env);
+                }
+                return errorResponse('Not Found', 404, 4040);
             }
 
             if (url.pathname.startsWith('/api/admin/')) {

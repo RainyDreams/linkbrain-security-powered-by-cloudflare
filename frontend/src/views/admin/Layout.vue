@@ -1,11 +1,14 @@
 ﻿<template>
   <div class="admin-shell">
+    <div v-if="debugMode" class="debug-banner">⚠ DEBUG MODE — 调试模式已启用 · 模拟撮合/跳过风控生效中</div>
+
     <!-- Top bar -->
-    <header class="topbar">
+    <header class="admin-topbar topbar">
       <div class="topbar-left">
         <router-link to="/admin/trade" class="topbar-brand">
-          <svg viewBox="0 0 24 24" width="18" height="18" fill="none">
-            <path d="M3 17l4-6 4 4 5-7 5 9" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+          <svg viewBox="0 0 24 24" width="20" height="20" fill="none">
+            <rect x="2" y="2" width="20" height="20" rx="5" fill="currentColor"/>
+            <path d="M7 14l3-3 3 3 4-6" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
           </svg>
           <span class="topbar-brand-name">Zero Ben</span>
           <span class="topbar-brand-sub">Trading Terminal</span>
@@ -17,32 +20,32 @@
             {{ marketState === 'open' ? '交易时段' : '非交易时段' }}
           </span>
           <span class="meta-sep">·</span>
-          <span class="mono">{{ nowText }}</span>
+          <span class="mono clock-text">{{ nowText }}</span>
         </nav>
       </div>
 
       <div class="topbar-right">
-        <div class="topbar-stats" v-if="!isMobile">
-          <div class="t-stat">
-            <span class="t-stat-label">总资产</span>
-            <span class="t-stat-value mono num-strong">¥{{ formatMoney(store.dashboard.total) }}</span>
+        <div class="topbar-stats admin-metrics">
+          <div class="t-stat admin-metric">
+            <span class="t-stat-label admin-metric-label">总资产</span>
+            <span class="t-stat-value admin-metric-value mono num-strong">¥{{ formatMoney(store.dashboard.total) }}</span>
           </div>
-          <div class="t-stat">
-            <span class="t-stat-label">可用</span>
-            <span class="t-stat-value mono num-strong">¥{{ formatMoney(store.dashboard.available) }}</span>
+          <div class="t-stat admin-metric">
+            <span class="t-stat-label admin-metric-label">可用</span>
+            <span class="t-stat-value admin-metric-value mono num-strong">¥{{ formatMoney(store.dashboard.available) }}</span>
           </div>
-          <div class="t-stat">
-            <span class="t-stat-label">冻结</span>
-            <span class="t-stat-value mono text-muted">¥{{ formatMoney(store.dashboard.frozen) }}</span>
+          <div class="t-stat admin-metric">
+            <span class="t-stat-label admin-metric-label">冻结</span>
+            <span class="t-stat-value admin-metric-value mono text-muted">¥{{ formatMoney(store.dashboard.frozen) }}</span>
           </div>
-          <div class="t-stat">
-            <span class="t-stat-label">挂单</span>
-            <span class="t-stat-value mono num-strong">{{ store.pendingOrders.length }}</span>
+          <div class="t-stat admin-metric">
+            <span class="t-stat-label admin-metric-label">挂单</span>
+            <span class="t-stat-value admin-metric-value mono num-strong">{{ store.pendingOrders.length }}</span>
           </div>
         </div>
 
-        <button class="btn btn-secondary btn-sm" @click="refresh" :disabled="store.loadingAdmin">
-          <svg viewBox="0 0 16 16" width="12" height="12" fill="none">
+        <button class="btn btn-secondary btn-sm" @click="refresh" :disabled="store.loadingAdmin" aria-label="刷新">
+          <svg viewBox="0 0 16 16" width="13" height="13" fill="none">
             <path d="M2 8a6 6 0 0 1 10.5-4M14 8A6 6 0 0 1 3.5 12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
             <path d="M12 1v3h-3M4 15v-3h3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
           </svg>
@@ -57,6 +60,7 @@
               <span class="mono">admin</span>
             </div>
             <hr/>
+            <button class="user-menu-item" @click="toggleDebug">{{ debugMode ? '🔴 退出调试模式' : '🔧 启用调试模式' }}</button>
             <button class="user-menu-item" @click="goVisitor">访问公开页</button>
             <button class="user-menu-item danger" @click="logout">退出登录</button>
           </div>
@@ -65,8 +69,8 @@
     </header>
 
     <div class="admin-body">
-      <!-- Side nav -->
-      <aside class="sidenav">
+      <!-- Side nav (IconPark 风格) -->
+      <aside class="admin-sidenav sidenav">
         <nav>
           <router-link
             v-for="tab in tabs"
@@ -112,39 +116,41 @@ const store = useMarketStore();
 const nowText = ref(shanghaiNowText());
 const isMobile = ref(typeof window !== 'undefined' ? window.innerWidth <= 720 : false);
 const showMenu = ref(false);
+const debugMode = ref(false);
 
 const marketState = computed(() => (isTradingSession() ? 'open' : 'closed'));
 
+// IconPark 风格图标（线条 + 圆角 + 现代）
 const tabs = [
   {
     path: '/admin/trade',
     label: '交易',
-    icon: '<svg viewBox="0 0 16 16" fill="none"><path d="M2 11l4-4 3 3 5-6M14 4h-3M14 4v3" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>'
+    icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 17l5-5 4 4 8-9"/><path d="M14 7h6v6"/></svg>'
   },
   {
     path: '/admin/orders',
     label: '订单',
-    icon: '<svg viewBox="0 0 16 16" fill="none"><rect x="2.5" y="2.5" width="11" height="11" rx="1.5" stroke="currentColor" stroke-width="1.4"/><path d="M5 6h6M5 9h6M5 12h4" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg>'
+    icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="4" width="16" height="16" rx="2"/><path d="M8 9h8M8 13h8M8 17h5"/></svg>'
   },
   {
     path: '/admin/holdings',
     label: '持仓',
-    icon: '<svg viewBox="0 0 16 16" fill="none"><path d="M3 12V6m4 6V3m4 9V8m2 4V5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>'
+    icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20V10m5 10V4m5 16v-7m5 7v-3"/><circle cx="9" cy="4" r="1.2" fill="currentColor"/></svg>'
   },
   {
     path: '/admin/reports',
     label: '报告',
-    icon: '<svg viewBox="0 0 16 16" fill="none"><path d="M3 2.5h7l3 3v8a.5.5 0 0 1-.5.5H3a.5.5 0 0 1-.5-.5V3a.5.5 0 0 1 .5-.5z" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/><path d="M5 7h6M5 9.5h6M5 12h3" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg>'
+    icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3h9l4 4v13a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1z"/><path d="M15 3v4h4M8 12h8M8 16h6"/></svg>'
   },
   {
     path: '/admin/ai',
     label: 'AI 决策',
-    icon: '<svg viewBox="0 0 16 16" fill="none"><path d="M8 2l1.6 3.4L13 7l-3.4 1.6L8 12l-1.6-3.4L3 7l3.4-1.6L8 2z" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/></svg>'
+    icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2v3M12 19v3M4.2 4.2l2.1 2.1M17.7 17.7l2.1 2.1M2 12h3M19 12h3M4.2 19.8l2.1-2.1M17.7 6.3l2.1-2.1"/><circle cx="12" cy="12" r="4"/><circle cx="12" cy="12" r="1.5" fill="currentColor"/></svg>'
   },
   {
     path: '/admin/audit',
     label: '审计',
-    icon: '<svg viewBox="0 0 16 16" fill="none"><path d="M3 13l1.5-5L8 3l3.5 5 1.5 5H3z" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/><path d="M6 13V9.5h4V13" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg>'
+    icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2l8 4v6c0 5-3.5 9-8 10-4.5-1-8-5-8-10V6l8-4z"/><path d="M9 12l2 2 4-4"/></svg>'
   }
 ];
 
@@ -160,8 +166,36 @@ const logout = () => {
   router.push('/login');
 };
 
-const vClickOutside = (e: MouseEvent) => {
+const toggleDebug = () => {
   showMenu.value = false;
+  const key = (typeof window !== 'undefined' ? window.prompt('请输入 Debug 密钥：') : '') || '';
+  if (!key) return;
+  if (key === localStorage.getItem('__debug_key')) {
+    debugMode.value = !debugMode.value;
+    document.documentElement.classList.toggle('debug-mode', debugMode.value);
+    return;
+  }
+  if (typeof window !== 'undefined') {
+    fetch('/api/admin/debug/verify', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-Debug-Key': key }
+    })
+      .then(r => r.json())
+      .then((d: any) => {
+        if (d?.code === 0) {
+          debugMode.value = true;
+          document.documentElement.classList.add('debug-mode');
+          localStorage.setItem('__debug_key', key);
+        } else {
+          window.alert('密钥错误，无法启用调试模式');
+        }
+      })
+      .catch(() => window.alert('校验失败'));
+  }
+};
+
+const vClickOutside = (e: MouseEvent) => {
+  if (showMenu.value) showMenu.value = false;
 };
 
 let clockTimer: ReturnType<typeof setInterval> | null = null;
@@ -175,6 +209,24 @@ const onResize = () => {
 
 onMounted(async () => {
   await store.fetchAdminData();
+  // Restore debug mode if key cached
+  const cachedKey = localStorage.getItem('__debug_key');
+  if (cachedKey) {
+    fetch('/api/admin/debug/verify', {
+      method: 'POST',
+      headers: { 'X-Debug-Key': cachedKey }
+    })
+      .then(r => r.json())
+      .then((d: any) => {
+        if (d?.code === 0) {
+          debugMode.value = true;
+          document.documentElement.classList.add('debug-mode');
+        } else {
+          localStorage.removeItem('__debug_key');
+        }
+      })
+      .catch(() => {});
+  }
   clockTimer = setInterval(() => { nowText.value = shanghaiNowText(); }, 1000);
   pullTimer = setInterval(async () => {
     if (document.visibilityState !== 'visible') return;
@@ -202,7 +254,7 @@ onUnmounted(() => {
 }
 
 /* ===== Top bar ===== */
-.topbar {
+.admin-topbar {
   height: var(--topbar-h);
   background: var(--bg-elev);
   border-bottom: 1px solid var(--line);
@@ -214,29 +266,28 @@ onUnmounted(() => {
   position: sticky;
   top: 0;
   z-index: 30;
+  min-width: 0;
 }
 .topbar-left {
   display: flex;
   align-items: center;
-  gap: 20px;
+  gap: 16px;
   min-width: 0;
+  flex-shrink: 1;
 }
 .topbar-brand {
   display: inline-flex;
   align-items: center;
   gap: 8px;
   color: var(--text-strong);
+  flex-shrink: 0;
 }
-.topbar-brand svg {
-  background: var(--text);
-  color: #fff;
-  border-radius: var(--r-sm);
-  padding: 4px;
-}
+.topbar-brand svg { flex-shrink: 0; }
 .topbar-brand-name {
   font-size: 14px;
   font-weight: 800;
   letter-spacing: -0.01em;
+  white-space: nowrap;
 }
 .topbar-brand-sub {
   font-size: 11px;
@@ -246,6 +297,7 @@ onUnmounted(() => {
   padding-left: 8px;
   margin-left: 8px;
   border-left: 1px solid var(--line);
+  white-space: nowrap;
 }
 .topbar-meta {
   display: inline-flex;
@@ -253,39 +305,41 @@ onUnmounted(() => {
   gap: 8px;
   font-size: 12px;
   color: var(--text-soft);
+  min-width: 0;
+  white-space: nowrap;
 }
 .meta-sep { color: var(--text-faint); }
+.clock-text { white-space: nowrap; }
+
 .status-pill {
+  position: relative;
   display: inline-flex;
   align-items: center;
   gap: 5px;
-  height: 22px;
-  padding: 0 8px;
+  height: 24px;
+  padding: 0 9px;
   border-radius: 999px;
   font-size: 11px;
   font-weight: 700;
   background: var(--bg-inset);
   color: var(--text-soft);
   border: 1px solid var(--line-soft);
+  white-space: nowrap;
+  flex-shrink: 0;
 }
-.status-pill .status-dot {
-  width: 6px; height: 6px; border-radius: 999px;
-  background: var(--text-muted);
-  position: relative;
-}
+.status-pill .status-dot { width: 6px; height: 6px; border-radius: 999px; }
 .status-pill[data-state="open"] { background: var(--up-soft); color: var(--up); border-color: var(--up-line); }
 .status-pill[data-state="open"] .status-dot { background: var(--up); }
-.status-pill[data-state="open"] .status-dot::after {
-  content: ''; position: absolute; inset: -3px; border-radius: 999px; background: var(--up); opacity: 0.22;
-}
 .status-pill[data-state="closed"] { background: var(--bg-inset); color: var(--text-muted); }
+.status-pill[data-state="closed"] .status-dot { background: var(--text-muted); }
 
 .topbar-right {
   display: flex;
   align-items: center;
   gap: 8px;
+  flex-shrink: 0;
 }
-.topbar-stats {
+.admin-metrics {
   display: flex;
   align-items: stretch;
   gap: 0;
@@ -295,33 +349,36 @@ onUnmounted(() => {
   overflow: hidden;
   background: var(--bg-subtle);
 }
-.t-stat {
+.admin-metric {
   display: flex;
   flex-direction: column;
   gap: 1px;
   padding: 4px 12px;
   border-right: 1px solid var(--line-soft);
+  min-width: 0;
 }
-.t-stat:last-child { border-right: 0; }
-.t-stat-label {
+.admin-metric:last-child { border-right: 0; }
+.admin-metric-label {
   font-size: 10px;
   color: var(--text-muted);
   letter-spacing: 0.04em;
   font-weight: 600;
   text-transform: uppercase;
+  white-space: nowrap;
 }
-.t-stat-value {
+.admin-metric-value {
   font-size: 13px;
   font-weight: 700;
   color: var(--text-strong);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
-.topbar-user {
-  position: relative;
-}
+.topbar-user { position: relative; }
 .user-avatar {
-  width: 30px;
-  height: 30px;
+  width: 32px;
+  height: 32px;
   border-radius: 999px;
   background: var(--text);
   color: #fff;
@@ -337,7 +394,7 @@ onUnmounted(() => {
   position: absolute;
   right: 0;
   top: 38px;
-  width: 200px;
+  width: 220px;
   background: var(--bg-elev);
   border: 1px solid var(--line);
   border-radius: var(--r-md);
@@ -376,7 +433,7 @@ onUnmounted(() => {
   grid-template-columns: var(--sidenav-w) minmax(0, 1fr);
   min-height: 0;
 }
-.sidenav {
+.admin-sidenav {
   background: var(--bg-elev);
   border-right: 1px solid var(--line);
   padding: 12px;
@@ -387,7 +444,7 @@ onUnmounted(() => {
   top: var(--topbar-h);
   height: calc(100vh - var(--topbar-h));
 }
-.sidenav nav {
+.admin-sidenav nav {
   display: flex;
   flex-direction: column;
   gap: 2px;
@@ -403,6 +460,7 @@ onUnmounted(() => {
   font-weight: 600;
   transition: background 0.1s ease, color 0.1s ease;
   border: 1px solid transparent;
+  white-space: nowrap;
 }
 .side-item:hover {
   background: var(--bg-subtle);
@@ -436,25 +494,64 @@ onUnmounted(() => {
   max-width: 100%;
 }
 
-@media (max-width: 980px) {
+/* ===== Tablet ===== */
+@media (min-width: 721px) and (max-width: 980px) {
   .admin-body { grid-template-columns: 1fr; }
-  .sidenav {
-    position: fixed;
+  .admin-sidenav {
+    position: sticky;
     top: var(--topbar-h);
-    bottom: 0;
-    left: 0;
-    width: 220px;
-    z-index: 25;
-    transform: translateX(-100%);
-    transition: transform 0.18s ease;
+    height: auto;
+    border-right: 0;
+    border-bottom: 1px solid var(--line);
   }
-  .sidenav.is-open { transform: translateX(0); }
-  .topbar-brand-sub { display: none; }
+  .admin-sidenav nav {
+    flex-direction: row;
+    overflow-x: auto;
+  }
+  .admin-sidenav .sidenav-foot { display: none; }
 }
 
+/* ===== Mobile ===== */
 @media (max-width: 720px) {
-  .topbar-stats { display: none; }
+  .admin-body { grid-template-columns: 1fr; }
+  .admin-sidenav {
+    position: sticky;
+    top: var(--topbar-h);
+    height: auto;
+    border-right: 0;
+    border-bottom: 1px solid var(--line);
+    padding: 6px;
+  }
+  .admin-sidenav nav {
+    flex-direction: row;
+    overflow-x: auto;
+    gap: 4px;
+    -webkit-overflow-scrolling: touch;
+  }
+  .admin-sidenav .sidenav-foot { display: none; }
+  .admin-metrics { margin-right: 4px; }
+  .admin-metric { padding: 4px 8px; }
+  .admin-metric-label { font-size: 9px; }
+  .admin-metric-value { font-size: 12px; }
   .topbar-brand-sub { display: none; }
+  .topbar-meta .clock-text { display: none; }
   .admin-main { padding: 12px; }
+}
+
+@media (max-width: 480px) {
+  .admin-topbar {
+    flex-wrap: wrap;
+    height: auto;
+    padding: 8px 10px;
+    gap: 8px;
+  }
+  .admin-metrics {
+    order: 3;
+    width: 100%;
+    margin-right: 0;
+  }
+  .admin-metric { flex: 1; }
+  .topbar-right { flex: 1; justify-content: flex-end; }
+  .topbar-brand-name { font-size: 13px; }
 }
 </style>

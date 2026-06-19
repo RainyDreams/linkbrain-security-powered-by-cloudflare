@@ -1,6 +1,7 @@
 ﻿/* ==========================================================================
    Zero Ben Securities — Trading Terminal
-   全新设计系统 (2024) — 参考 OpenAI / Google Material 3 / opencode
+   全新设计系统 (2026) — 参考 OpenAI ChatGPT / IconPark / opencode
+   A 股配色：红涨青绿跌；调试模式 / Debug 密钥
    ========================================================================== */
 
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&family=Noto+Sans+SC:wght@400;500;600;700;800&display=swap');
@@ -29,20 +30,22 @@
   --text-muted: #7a8089;
   --text-faint: #a0a5ad;
 
-  /* Brand / Accent — OpenAI green */
+  /* Brand / Accent — OpenAI 风格 */
   --brand: #10a37f;
   --brand-deep: #0e8f6e;
   --brand-soft: rgba(16, 163, 127, 0.08);
   --brand-line: rgba(16, 163, 127, 0.22);
 
-  /* Market colors (international: green=up, red=down)
-     中国 A 股习惯是红涨绿跌，这里跟随主流交易终端习惯使用国际标准 */
-  --up: #16a34a;
-  --up-soft: rgba(22, 163, 74, 0.10);
-  --up-line: rgba(22, 163, 74, 0.25);
-  --down: #dc2626;
-  --down-soft: rgba(220, 38, 38, 0.10);
-  --down-line: rgba(220, 38, 38, 0.25);
+  /* A 股配色：红涨青绿跌（默认）
+     通过在 <html data-mkt> 上覆盖 */
+  --up: #dc2626;
+  --up-soft: rgba(220, 38, 38, 0.10);
+  --up-line: rgba(220, 38, 38, 0.25);
+  --up-deep: #b91c1c;
+  --down: #0891b2;
+  --down-soft: rgba(8, 145, 178, 0.10);
+  --down-line: rgba(8, 145, 178, 0.25);
+  --down-deep: #0e7490;
 
   /* Status */
   --warn: #b45309;
@@ -51,6 +54,11 @@
   --info: #2563eb;
   --info-soft: rgba(37, 99, 235, 0.10);
   --info-line: rgba(37, 99, 235, 0.22);
+
+  /* Debug 模式 */
+  --debug: #7c3aed;
+  --debug-soft: rgba(124, 58, 237, 0.10);
+  --debug-line: rgba(124, 58, 237, 0.25);
 
   /* Radii */
   --r-xs: 4px;
@@ -66,8 +74,8 @@
   --shadow-3: 0 4px 12px rgba(15, 17, 21, 0.04), 0 1px 0 rgba(15, 17, 21, 0.02);
 
   /* Layout */
-  --topbar-h: 52px;
-  --sidenav-w: 224px;
+  --topbar-h: 56px;
+  --sidenav-w: 220px;
   --content-max: 1440px;
 }
 
@@ -316,11 +324,14 @@ p { margin: 0; }
 
 /* ---------- Status dot ---------- */
 .status-dot {
+  position: relative;
   display: inline-block;
   width: 6px;
   height: 6px;
   border-radius: 999px;
   background: currentColor;
+  flex-shrink: 0;
+  pointer-events: none;
 }
 .status-dot::after {
   content: '';
@@ -329,6 +340,11 @@ p { margin: 0; }
   border-radius: 999px;
   background: currentColor;
   opacity: 0.18;
+  pointer-events: none;
+}
+.status-pill,
+.status-pill * {
+  position: relative;
 }
 
 /* ---------- Tables ---------- */
@@ -516,6 +532,122 @@ p { margin: 0; }
 @media (max-width: 720px) {
   html { font-size: 13.5px; }
   .page { padding: 12px; gap: 12px; }
+  .btn { height: 36px; padding: 0 12px; }
+  .input, .select { height: 38px; font-size: 14px; }
+}
+
+/* Tablet (>= 721px && <= 1024px) */
+@media (min-width: 721px) and (max-width: 1024px) {
+  :root { --sidenav-w: 180px; }
+}
+
+/* Mobile small (< 480px) — ChatGPT style */
+@media (max-width: 480px) {
+  :root {
+    --topbar-h: auto;
+    --sidenav-w: 100%;
+  }
+  html { font-size: 14px; }
+  body { font-size: 14px; }
+  .page { padding: 10px; gap: 10px; }
+
+  /* Stack the admin topbar/sidenav */
+  .admin-shell { flex-direction: column !important; }
+  .admin-topbar {
+    flex-wrap: wrap !important;
+    height: auto !important;
+    padding: 10px 12px !important;
+    gap: 8px !important;
+  }
+  .admin-topbar .admin-metrics {
+    flex-wrap: wrap !important;
+    gap: 6px !important;
+  }
+  .admin-topbar .admin-metric {
+    flex: 1 1 calc(50% - 6px) !important;
+    min-width: 0 !important;
+    padding: 6px 8px !important;
+  }
+  .admin-topbar .admin-metric-label {
+    font-size: 10px !important;
+  }
+  .admin-topbar .admin-metric-value {
+    font-size: 13px !important;
+  }
+  .admin-sidenav {
+    position: sticky !important;
+    top: 0 !important;
+    width: 100% !important;
+    height: auto !important;
+    border-right: none !important;
+    border-bottom: 1px solid var(--line) !important;
+    padding: 6px 8px !important;
+  }
+  .admin-sidenav nav {
+    display: flex !important;
+    flex-direction: row !important;
+    overflow-x: auto !important;
+    gap: 4px !important;
+    -webkit-overflow-scrolling: touch;
+  }
+  .admin-sidenav nav a,
+  .admin-sidenav nav button {
+    flex-shrink: 0 !important;
+    padding: 6px 10px !important;
+    font-size: 11px !important;
+    height: auto !important;
+    min-height: 32px !important;
+  }
+  .admin-sidenav nav a svg,
+  .admin-sidenav nav button svg {
+    width: 14px !important;
+    height: 14px !important;
+  }
+  .admin-sidenav .sidenav-footer {
+    display: none !important;
+  }
+  .admin-main {
+    padding: 10px !important;
+  }
+
+  /* Tables: keep layout but reduce padding/font */
+  .tbl { font-size: 11.5px; }
+  .tbl thead th { padding: 6px 8px; font-size: 10px; }
+  .tbl tbody td { padding: 8px; }
+
+  /* Mobile numeric block */
+  .num-block { font-size: 22px !important; }
+}
+
+/* ChatGPT-style hero / large text for visitor page */
+.chat-hero {
+  font-family: 'Inter', 'Noto Sans SC', sans-serif;
+  font-weight: 700;
+  font-feature-settings: 'tnum' 1;
+  letter-spacing: -0.02em;
+  line-height: 1.05;
+}
+
+/* Debug mode banner */
+.debug-banner {
+  position: fixed;
+  top: 0; left: 0; right: 0;
+  background: var(--debug);
+  color: #fff;
+  text-align: center;
+  font-size: 11px;
+  padding: 4px 12px;
+  z-index: 200;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+}
+.debug-mode .surface {
+  outline: 1px dashed var(--debug-line);
+}
+
+/* Prevent any debug overlay intercepting clicks */
+.debug-overlay {
+  pointer-events: none;
 }
 
 @media (prefers-reduced-motion: reduce) {

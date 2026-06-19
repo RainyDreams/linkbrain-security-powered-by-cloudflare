@@ -2,7 +2,7 @@ import { matchOrders } from './trade.js';
 import { Money, Time } from './utils.js';
 import { fetchStockPrice } from './market.js';
 import { ensureRuntimeSchema, withTransaction } from './db.js';
-import { logBizError, logError } from './audit.js';
+import { logBizError, logError, logTechnicalAudit } from './audit.js';
 import { runAiCommittee, runQueuedAiTasks } from './ai_committee.js';
 
 const AI_CRON_DISCUSSION_SLOTS = Object.freeze([
@@ -13,6 +13,32 @@ const AI_CRON_DISCUSSION_SLOTS = Object.freeze([
     { start_hhmm: 2100, end_hhmm: 2110 }
 ]);
 
+const acquireDailyJobLock = async (env, jobName, cstDate) => {
+    const lockKey = `${jobName}:${cstDate}`;
+    const res = await env.DB.prepare(
+        'INSERT OR IGNORE INTO meta (key, value, updated_at) VALUES (?, ?, CURRENT_TIMESTAMP)'
+    ).bind(lockKey, '1').run();
+    return (res?.meta?.changes || 0) > 0;
+};
+
+const purgeOldLogs = async (env) => {
+    const purge = async (sql, days) => {
+        try {
+            const r = await env.DB.prepare(sql).bind(`-${Math.max(1, days)} days`).run();
+            return Number(r?.meta?.changes || 0);
+        } catch { return 0; }
+    };
+    const summary = {
+        audit_technical: await purge("DELETE FROM audit_technical WHERE created_at_cst IS NOT NULL AND created_at_cst < datetime('now', '+8 hours', ?)", 90),
+        audit_financial: await purge("DELETE FROM audit_financial WHERE created_at_cst IS NOT NULL AND created_at_cst < datetime('now', '+8 hours', ?)", 90),
+        login_attempts: await purge("DELETE FROM login_attempts WHERE updated_at < datetime('now', ?)", 30),
+        ai_tasks: await purge("DELETE FROM ai_committee_tasks WHERE finished_at IS NOT NULL AND finished_at < datetime('now', ?)", 30),
+        ai_runs: await purge("DELETE FROM ai_committee_runs WHERE created_at_cst IS NOT NULL AND created_at_cst < datetime('now', '+8 hours', ?)", 180),
+        ai_rss_cache: await purge("DELETE FROM meta WHERE key='ai.rss.cache' AND updated_at < datetime('now', ?)", 7)
+    };
+    return summary;
+};
+
 const shouldTriggerAiDiscussion = (cst) => {
     const day = cst.getDay();
     if (day === 0 || day === 6) return false;
@@ -21,14 +47,6 @@ const shouldTriggerAiDiscussion = (cst) => {
         if (hhmm >= slot.start_hhmm && hhmm <= slot.end_hhmm) return true;
     }
     return false;
-};
-
-const acquireDailyJobLock = async (env, jobName, cstDate) => {
-    const lockKey = `${jobName}:${cstDate}`;
-    const res = await env.DB.prepare(
-        'INSERT OR IGNORE INTO meta (key, value, updated_at) VALUES (?, ?, CURRENT_TIMESTAMP)'
-    ).bind(lockKey, '1').run();
-    return (res?.meta?.changes || 0) > 0;
 };
 
 export const handleScheduled = async (event, env) => {
@@ -45,6 +63,30 @@ export const handleScheduled = async (event, env) => {
         await recoverStuckOrders(env);
         await reconcileFrozenBalance(env);
         await runQueuedAiTasks(env, { max_tasks: 2 });
+
+        // 每 5 天凌晨清理过期日志（带每日锁，避免重复执行）
+        if (timeValue >= 3 && timeValue <= 6) {
+            const cstDay = Number(cstDate.replace(/-/g, ''));
+            if (cstDay % 5 === 0) {
+                const locked = await acquireDailyJobLock(env, 'purge_logs', cstDate);
+                if (locked) {
+                    try {
+                        const summary = await purgeOldLogs(env);
+                        await logTechnicalAudit(env, {
+                            level: 'INFO',
+                            scope: 'cron.purge_logs',
+                            category: 'cron',
+                            subcategory: 'cleanup',
+                            status: 'SUCCESS',
+                            message: 'cron purge old logs executed',
+                            meta: { summary, cst_date: cstDate }
+                        });
+                    } catch (e) {
+                        await logError(env, e, { job: 'purge_logs' }, 'cron');
+                    }
+                }
+            }
+        }
 
         if (day === 0 || day === 6) return;
 
