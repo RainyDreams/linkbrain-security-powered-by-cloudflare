@@ -1,124 +1,129 @@
 ﻿<template>
   <div class="holdings-page">
-    <section class="glass-card block-head">
-      <div class="head-grid">
-        <div class="metric-box">
-          <span class="kv-label">总资产</span>
-          <strong class="kv-value font-mono">¥{{ formatMoney(store.dashboard.total) }}</strong>
+    <!-- Portfolio summary -->
+    <section class="surface summary-card">
+      <div class="summary-grid">
+        <div class="summary-item">
+          <span class="s-label">总资产</span>
+          <span class="s-value mono num-strong">¥{{ formatMoney(store.dashboard.total) }}</span>
         </div>
-        <div class="metric-box">
-          <span class="kv-label">证券市值</span>
-          <strong class="kv-value font-mono">¥{{ formatMoney(store.dashboard.market_cap) }}</strong>
+        <div class="summary-item">
+          <span class="s-label">证券市值</span>
+          <span class="s-value mono num-strong">¥{{ formatMoney(store.dashboard.market_cap) }}</span>
         </div>
-        <div class="metric-box">
-          <span class="kv-label">可用资金</span>
-          <strong class="kv-value font-mono">¥{{ formatMoney(store.dashboard.available) }}</strong>
+        <div class="summary-item">
+          <span class="s-label">可用资金</span>
+          <span class="s-value mono num-strong">¥{{ formatMoney(store.dashboard.available) }}</span>
         </div>
-        <div class="metric-box">
-          <span class="kv-label">冻结资金</span>
-          <strong class="kv-value font-mono">¥{{ formatMoney(store.dashboard.frozen) }}</strong>
+        <div class="summary-item">
+          <span class="s-label">冻结资金</span>
+          <span class="s-value mono text-muted">¥{{ formatMoney(store.dashboard.frozen) }}</span>
         </div>
       </div>
+      <div class="summary-actions">
+        <button class="btn btn-primary" @click="openTransfer('IN')">
+          <svg viewBox="0 0 16 16" width="12" height="12" fill="none">
+            <path d="M8 3v10M3 8h10" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
+          </svg>
+          <span>银证转入</span>
+        </button>
+        <button class="btn btn-secondary" @click="openTransfer('OUT')">银证转出</button>
+        <button class="btn btn-ghost" @click="refresh">刷新</button>
+      </div>
+    </section>
 
-      <div class="action-row">
-        <button class="btn-solid btn-primary" @click="openTransfer('IN')">银证转入</button>
-        <button class="btn-solid btn-ghost" @click="openTransfer('OUT')">银证转出</button>
-        <button class="btn-solid btn-ghost" @click="refresh">刷新</button>
+    <!-- Holdings table -->
+    <section class="surface table-card">
+      <header class="table-head">
+        <div>
+          <h3 class="t-title">持仓明细</h3>
+          <p class="t-sub">{{ rows.length }} 只 · 按当前价估算</p>
+        </div>
+      </header>
+
+      <div v-if="rows.length === 0" class="empty">
+        <span class="empty-title">暂无持仓</span>
+        <span class="text-faint">成交后会自动出现在这里</span>
+      </div>
+
+      <div v-else class="tbl-wrap scroll-thin">
+        <table class="tbl tbl-condensed">
+          <thead>
+            <tr>
+              <th>证券</th>
+              <th class="is-num">数量 (总/可卖)</th>
+              <th class="is-num">现价</th>
+              <th class="is-num">浮盈亏</th>
+              <th class="is-num">仓位</th>
+              <th class="is-num">操作</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-for="h in rows" :key="h.symbol">
+              <td>
+                <div class="cell-name">{{ h.name || '--' }}</div>
+                <div class="cell-code mono">{{ h.symbol }}</div>
+              </td>
+              <td class="is-num">
+                <span class="mono num-strong">{{ formatQty(h.quantity) }}</span>
+                <span class="text-faint mono"> / {{ formatQty(h.available_qty) }}</span>
+              </td>
+              <td class="is-num mono">¥{{ formatMoney(h.current_price) }}</td>
+              <td class="is-num mono num-strong" :class="Number(h.pnl) >= 0 ? 'num-up' : 'num-down'">
+                {{ Number(h.pnl) >= 0 ? '+' : '' }}¥{{ formatMoney(h.pnl) }}
+              </td>
+              <td class="is-num mono">{{ h.position }}%</td>
+              <td class="is-num">
+                <div class="row-actions">
+                  <button class="btn btn-secondary btn-sm" @click="goTrade(h.symbol, 'buy')">买</button>
+                  <button class="btn btn-secondary btn-sm" @click="goTrade(h.symbol, 'sell')">卖</button>
+                </div>
+              </td>
+            </tr>
+          </tbody>
+        </table>
       </div>
     </section>
 
-
-    <section class="glass-card overflow-hidden">
-      <div class="section-head">
-        <h2 class="panel-title">持仓明细</h2>
-        <span class="text-xs text-slate-500">{{ rows.length }} 只</span>
-      </div>
-
-      <div v-if="rows.length === 0" class="empty-line">暂无持仓</div>
-
-      <div v-else>
-        <div class="mobile-cards md:hidden">
-          <article v-for="h in rows" :key="h.symbol" class="surface-soft item-card">
-            <div class="item-top">
-              <div>
-                <div class="name">{{ h.name || '--' }}</div>
-                <div class="code font-mono">{{ h.symbol }}</div>
-              </div>
-              <div class="text-right">
-                <div class="font-mono text-sm">¥{{ formatMoney(h.current_price) }}</div>
-                <div class="text-xs font-mono" :class="getColor(h.pnl)">¥{{ formatMoney(h.pnl) }}</div>
-              </div>
-            </div>
-            <div class="item-meta">
-              <span>数量(总/可卖) <strong class="font-mono">{{ formatQty(h.quantity) }} / {{ formatQty(h.available_qty) }}</strong></span>
-              <span>仓位 <strong class="font-mono">{{ h.position }}%</strong></span>
-            </div>
-            <div class="item-actions">
-              <button @click="goTrade(h.symbol, 'buy')">买入</button>
-              <button @click="goTrade(h.symbol, 'sell')">卖出</button>
-            </div>
-          </article>
-        </div>
-
-        <div class="hidden md:block overflow-x-auto scrollbar-thin">
-          <table class="min-w-full table-dense text-[12px]">
-            <thead class="data-table-head">
-              <tr>
-                <th class="px-4 py-3 text-left">证券</th>
-                <th class="px-4 py-3 text-right">数量(总/可卖)</th>
-                <th class="px-4 py-3 text-right">现价</th>
-                <th class="px-4 py-3 text-right">浮盈亏</th>
-                <th class="px-4 py-3 text-right">仓位</th>
-                <th class="px-4 py-3 text-right">操作</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr v-for="h in rows" :key="h.symbol" class="border-t border-[var(--line)]/70">
-                <td class="px-4 py-3">
-                  <div class="font-semibold text-slate-800">{{ h.name || '--' }}</div>
-                  <div class="font-mono text-xs text-slate-500">{{ h.symbol }}</div>
-                </td>
-                <td class="px-4 py-3 text-right font-mono text-slate-700">{{ formatQty(h.quantity) }} / {{ formatQty(h.available_qty) }}</td>
-                <td class="px-4 py-3 text-right font-mono text-slate-700">¥{{ formatMoney(h.current_price) }}</td>
-                <td class="px-4 py-3 text-right font-mono" :class="getColor(h.pnl)">¥{{ formatMoney(h.pnl) }}</td>
-                <td class="px-4 py-3 text-right font-mono text-slate-700">{{ h.position }}%</td>
-                <td class="px-4 py-3 text-right">
-                  <button class="btn-mini" @click="goTrade(h.symbol, 'buy')">买入</button>
-                  <button class="btn-mini" @click="goTrade(h.symbol, 'sell')">卖出</button>
-                </td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-      </div>
-    </section>
+    <!-- Transfer modal -->
     <Teleport to="body">
-      <div v-if="showTransfer" class="modal-wrap" @click.self="closeTransferModal">
-        <div class="modal-card" role="dialog" aria-modal="true" tabindex="-1" @click.stop>
-          <h3>{{ transferType === 'IN' ? '银证转入' : '银证转出' }}</h3>
-
-          <label class="field-block">
-            <span class="field-label">金额(元)</span>
-            <input
-              v-model="transferAmount"
-              type="number"
-              step="0.01"
-              min="0"
-              class="field-input"
-              placeholder="0.00"
-            />
-          </label>
-
-          <div class="surface-soft modal-meta">
-            <div>request_id: <span class="font-mono">{{ previewRequestId }}</span></div>
+      <div v-if="showTransfer" class="modal-mask" @click.self="closeTransfer">
+        <div class="modal-shell" style="max-width: 420px;">
+          <header class="modal-header">
+            <h3 class="modal-title">{{ transferType === 'IN' ? '银证转入' : '银证转出' }}</h3>
+            <button class="btn btn-ghost btn-icon" @click="closeTransfer">×</button>
+          </header>
+          <div class="modal-body">
+            <div class="field">
+              <label class="field-label">金额 (元)</label>
+              <input
+                v-model="transferAmount"
+                type="number"
+                step="0.01"
+                min="0"
+                class="input input-lg input-mono"
+                placeholder="0.00"
+              />
+              <p class="field-hint">单笔上限 ¥5,000,000 · 当日累计上限 ¥10,000,000</p>
+            </div>
+            <div class="surface-soft meta-block">
+              <div>
+                <span class="text-muted">流水号</span>
+                <span class="mono text-strong">{{ previewRequestId }}</span>
+              </div>
+              <div>
+                <span class="text-muted">当前可用</span>
+                <span class="mono text-strong">¥{{ formatMoney(store.dashboard.available) }}</span>
+              </div>
+            </div>
           </div>
-
-          <div class="modal-actions">
-            <button class="btn-solid btn-ghost" @click="closeTransferModal">取消</button>
-            <button class="btn-solid btn-primary" :disabled="transfering" @click="submitTransfer">
-              {{ transfering ? '提交中...' : '确认提交' }}
+          <footer class="modal-footer">
+            <button class="btn btn-secondary" @click="closeTransfer">取消</button>
+            <button class="btn btn-primary" :disabled="transfering" @click="submitTransfer">
+              <span v-if="transfering" class="spinner"></span>
+              <span>{{ transfering ? '提交中...' : '确认' }}</span>
             </button>
-          </div>
+          </footer>
         </div>
       </div>
     </Teleport>
@@ -130,7 +135,7 @@ import { computed, onUnmounted, ref, watch } from 'vue';
 import { useRouter } from 'vue-router';
 import api from '../../api';
 import { useMarketStore } from '../../stores/market';
-import { formatMoney, formatQty, getColor } from '../../utils/format';
+import { formatMoney, formatQty } from '../../utils/format';
 import { notifyError, notifySuccess } from '../../utils/notify';
 
 const store = useMarketStore();
@@ -140,13 +145,14 @@ const rows = computed(() => {
   const total = Number(store.dashboard.total || 0);
   return store.holdings.map((h: any) => {
     const qty = Number(h.quantity || 0);
-    const marketValue = Number(h.current_price || 0) * qty;
-    const pnl = marketValue - Number(h.total_cost || 0);
+    const mv = Number(h.current_price || 0) * qty;
+    const cost = Number(h.total_cost || 0);
+    const pnl = mv - cost;
     return {
       ...h,
-      marketValue,
+      marketValue: mv,
       pnl,
-      position: total > 0 ? ((marketValue / total) * 100).toFixed(2) : '0.00'
+      position: total > 0 ? ((mv / total) * 100).toFixed(2) : '0.00'
     };
   });
 });
@@ -164,9 +170,7 @@ const openTransfer = (type: 'IN' | 'OUT') => {
   showTransfer.value = true;
 };
 
-const closeTransferModal = () => {
-  showTransfer.value = false;
-};
+const closeTransfer = () => { showTransfer.value = false; };
 
 const submitTransfer = async () => {
   const amount = Number(transferAmount.value);
@@ -174,17 +178,11 @@ const submitTransfer = async () => {
     notifyError('金额输入无效', '转账金额必须大于 0。');
     return;
   }
-
   transfering.value = true;
   try {
-    await api.transfer({
-      amount,
-      type: transferType.value,
-      request_id: previewRequestId.value
-    });
-
-    notifySuccess(transferType.value === 'IN' ? '银证转入提交成功' : '银证转出提交成功', `请求流水号：${previewRequestId.value}`);
-    closeTransferModal();
+    await api.transfer({ amount, type: transferType.value, request_id: previewRequestId.value });
+    notifySuccess(transferType.value === 'IN' ? '银证转入提交成功' : '银证转出提交成功', `流水号：${previewRequestId.value}`);
+    closeTransfer();
     await store.fetchAdminData();
   } finally {
     transfering.value = false;
@@ -196,216 +194,44 @@ const goTrade = (symbol: string, side: 'buy' | 'sell') => {
   router.push({ path: '/admin/trade', query: { side: side === 'buy' ? 'BUY' : 'SELL' } });
 };
 
-const refresh = async () => {
-  await store.fetchAdminData(true);
-};
+const refresh = async () => { await store.fetchAdminData(true); };
 
 const toggleBodyScroll = (locked: boolean) => {
   if (typeof document === 'undefined') return;
   document.body.style.overflow = locked ? 'hidden' : '';
 };
 
-watch(showTransfer, (visible) => {
-  toggleBodyScroll(visible);
-});
-
-onUnmounted(() => {
-  toggleBodyScroll(false);
-});
+watch(showTransfer, (v) => toggleBodyScroll(v));
+onUnmounted(() => toggleBodyScroll(false));
 </script>
 
 <style scoped>
-.holdings-page {
-  display: grid;
-  gap: 12px;
+.holdings-page { display: flex; flex-direction: column; gap: 14px; max-width: 1440px; }
+
+.summary-card { padding: 16px; display: flex; flex-direction: column; gap: 14px; }
+.summary-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px 24px; }
+.summary-item { display: flex; flex-direction: column; gap: 2px; padding: 6px 0; }
+.s-label { font-size: 11px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.06em; font-weight: 600; }
+.s-value { font-size: 18px; font-weight: 700; color: var(--text-strong); }
+.summary-actions { display: flex; gap: 8px; flex-wrap: wrap; padding-top: 8px; border-top: 1px solid var(--line-soft); }
+
+@media (min-width: 980px) {
+  .summary-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
 }
 
-.block-head {
-  padding: 12px;
+.table-card { padding: 0; }
+.table-head { padding: 14px 18px; border-bottom: 1px solid var(--line); }
+.t-title { font-size: 14px; font-weight: 700; color: var(--text-strong); }
+.t-sub { font-size: 12px; color: var(--text-muted); margin-top: 2px; }
+.tbl-wrap { overflow: auto; max-height: 60vh; }
+
+.cell-name { font-size: 13px; font-weight: 600; color: var(--text-strong); }
+.cell-code { font-size: 11px; color: var(--text-muted); margin-top: 1px; }
+
+.row-actions { display: inline-flex; gap: 4px; }
+.meta-block {
+  display: grid; grid-template-columns: 1fr 1fr; gap: 8px 12px; padding: 8px 10px;
+  font-size: 12px; color: var(--text-soft);
 }
-
-.head-grid {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 8px;
-}
-
-.metric-box {
-  border: 1px solid var(--line);
-  border-radius: var(--radius-sm);
-  background: var(--surface-soft);
-  padding: 9px 10px;
-}
-
-.action-row {
-  margin-top: 10px;
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-}
-
-.section-head {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  border-bottom: 1px solid var(--line);
-  padding: 12px 14px;
-}
-
-.empty-line {
-  padding: 36px 16px;
-  text-align: center;
-  color: var(--text-muted);
-}
-
-.mobile-cards {
-  display: grid;
-  gap: 8px;
-  padding: 10px;
-}
-
-.item-card {
-  padding: 10px;
-}
-
-.item-top {
-  display: flex;
-  justify-content: space-between;
-  gap: 10px;
-}
-
-.name {
-  font-size: 14px;
-  font-weight: 700;
-}
-
-.code {
-  font-size: 11px;
-  color: var(--text-muted);
-  margin-top: 2px;
-}
-
-.item-meta {
-  margin-top: 8px;
-  display: grid;
-  gap: 3px;
-  font-size: 12px;
-  color: var(--text-soft);
-}
-
-.item-actions {
-  margin-top: 10px;
-  display: flex;
-  justify-content: flex-end;
-  gap: 8px;
-}
-
-.item-actions button,
-.btn-mini {
-  border: 1px solid var(--line-strong);
-  border-radius: var(--radius-sm);
-  background: #fff;
-  color: var(--text-soft);
-  padding: 5px 10px;
-  font-size: 12px;
-  font-weight: 700;
-}
-
-.btn-mini + .btn-mini {
-  margin-left: 6px;
-}
-
-.modal-wrap {
-  position: fixed;
-  inset: 0;
-  background: rgba(11, 18, 33, 0.46);
-  backdrop-filter: blur(4px);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 14px;
-  z-index: 2400;
-}
-
-.modal-card {
-  width: min(440px, 96vw);
-  max-height: min(88vh, 760px);
-  overflow: auto;
-  border-radius: var(--radius-lg);
-  border: 1px solid var(--line);
-  background: #fff;
-  padding: 12px;
-  display: grid;
-  gap: 9px;
-  box-shadow: var(--shadow-soft);
-}
-
-.modal-card h3 {
-  margin: 0;
-  font-size: 15px;
-  font-weight: 800;
-}
-
-.field-block {
-  display: grid;
-  gap: 6px;
-}
-
-.field-label {
-  font-size: 11px;
-  color: var(--text-soft);
-}
-
-.field-input {
-  width: 100%;
-  border: 1px solid var(--line-strong);
-  border-radius: var(--radius-sm);
-  padding: 9px;
-  font-size: 13px;
-}
-
-.modal-meta {
-  padding: 8px 10px;
-  font-size: 12px;
-  color: var(--text-soft);
-  display: grid;
-  gap: 3px;
-}
-
-.modal-actions {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 8px;
-}
-
-@media (max-width: 640px) {
-  .modal-wrap {
-    padding: 8px;
-  }
-
-  .modal-card {
-    width: 100%;
-    max-height: 92vh;
-    padding: 10px;
-    gap: 8px;
-  }
-
-  .modal-card h3 {
-    font-size: 14px;
-  }
-
-  .field-input {
-    font-size: 12px;
-  }
-}
-
-@media (min-width: 920px) {
-  .head-grid {
-    grid-template-columns: repeat(4, minmax(0, 1fr));
-  }
-
-  .block-head {
-    padding: 14px;
-  }
-}
+.meta-block .mono { color: var(--text); font-weight: 600; }
 </style>

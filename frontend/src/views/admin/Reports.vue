@@ -1,120 +1,134 @@
 <template>
   <div class="reports-page">
-    <section class="glass-card report-editor">
-      <div class="head-row">
+    <!-- Editor -->
+    <section class="surface editor-card">
+      <header class="card-head">
         <div>
-          <h2 class="panel-title">交易报告</h2>
-          <p class="panel-sub">支持日报/周报/月报；经验会进入后续交易决策上下文。</p>
+          <h3 class="t-title">写新报告</h3>
+          <p class="t-sub">日报 / 周报 / 月报 · 经验会进入后续交易决策上下文</p>
         </div>
-        <button class="btn-solid btn-ghost" :disabled="loading" @click="refreshAll">
-          {{ loading ? '刷新中...' : '刷新' }}
-        </button>
-      </div>
+        <div class="head-actions">
+          <button class="btn btn-ghost" @click="resetReportForm">清空</button>
+          <button class="btn btn-primary" :disabled="savingReport" @click="saveReport">
+            <span v-if="savingReport" class="spinner"></span>
+            <span>{{ savingReport ? '保存中...' : (reportForm.id ? '更新报告' : '保存报告') }}</span>
+          </button>
+        </div>
+      </header>
 
       <div class="editor-grid">
-        <label class="field-block">
-          <span class="field-label">报告类型</span>
-          <select v-model="reportForm.period_type" class="field-input">
-            <option value="DAILY">日报</option>
-            <option value="WEEKLY">周报</option>
-            <option value="MONTHLY">月报</option>
-          </select>
-        </label>
-        <label class="field-block">
-          <span class="field-label">周期键（可选）</span>
-          <input v-model="reportForm.period_key" class="field-input" placeholder="自动生成，如 2026-03-04 / 2026-W10 / 2026-03" />
-        </label>
-        <label class="field-block">
-          <span class="field-label">标题（可选）</span>
-          <input v-model="reportForm.title" class="field-input" placeholder="今日复盘 / 第10周总结 / 三月月报" />
-        </label>
+        <div class="field">
+          <label class="field-label">报告类型</label>
+          <div class="seg">
+            <button v-for="opt in periodOptions" :key="opt.value"
+              :class="['seg-btn', reportForm.period_type === opt.value ? 'is-active' : '']"
+              @click="reportForm.period_type = opt.value">
+              {{ opt.label }}
+            </button>
+          </div>
+        </div>
+        <div class="field">
+          <label class="field-label">周期键 (可选)</label>
+          <input v-model="reportForm.period_key" class="input" placeholder="自动生成, 如 2026-03-04 / 2026-W10 / 2026-03" />
+        </div>
+        <div class="field">
+          <label class="field-label">标题 (可选)</label>
+          <input v-model="reportForm.title" class="input" placeholder="今日复盘 / 第 10 周总结 / 三月月报" />
+        </div>
       </div>
 
-      <label class="field-block">
-        <span class="field-label">总结</span>
+      <div class="field">
+        <label class="field-label">总结</label>
         <textarea
           v-model="reportForm.summary"
-          rows="4"
+          class="textarea"
+          rows="5"
           maxlength="12000"
-          class="field-input field-textarea"
           placeholder="记录交易动作、得失、风控执行、偏差原因..."
         ></textarea>
-      </label>
+      </div>
 
-      <label class="field-block">
-        <span class="field-label">经验（言简意赅，一语道破）</span>
+      <div class="field">
+        <label class="field-label">经验</label>
         <textarea
           v-model="reportForm.experience"
+          class="textarea"
           rows="3"
           maxlength="4000"
-          class="field-input field-textarea"
-          placeholder="例如：顺势加仓可以慢，逆势减仓必须快。"
+          placeholder="一句可复用的话, 例: 顺势加仓可慢, 逆势减仓必须快。"
         ></textarea>
-      </label>
-
-      <div class="action-row">
-        <button class="btn-solid btn-primary" :disabled="savingReport" @click="saveReport">
-          {{ savingReport ? '保存中...' : (reportForm.id ? '更新报告' : '保存报告') }}
-        </button>
-        <button class="btn-solid btn-ghost" @click="resetReportForm">清空</button>
       </div>
     </section>
 
-    <section class="glass-card experience-panel">
-      <div class="head-row">
-        <h3 class="panel-title">经验库</h3>
-        <span class="status-chip">{{ experiences.length }} 条</span>
-      </div>
-      <div class="experience-editor">
+    <!-- Experience library -->
+    <section class="surface exp-card">
+      <header class="card-head">
+        <div>
+          <h3 class="t-title">经验库</h3>
+          <p class="t-sub">高权重经验会被 AI 决策优先参考</p>
+        </div>
+      </header>
+
+      <div class="exp-input">
         <input
           v-model="experienceForm.content"
+          class="input"
           maxlength="600"
-          class="field-input"
-          placeholder="写一句经验：简短、可执行、可复用"
+          placeholder="写一句可复用的经验..."
         />
         <input
           v-model.number="experienceForm.weight"
           type="number"
           min="0"
           max="100"
-          class="field-input weight-input"
+          class="input input-mono weight-input"
           placeholder="权重"
         />
-        <button class="btn-solid btn-primary" :disabled="savingExperience" @click="saveExperience">
-          {{ savingExperience ? '保存中...' : '加入经验库' }}
+        <button class="btn btn-primary" :disabled="savingExperience" @click="saveExperience">
+          {{ savingExperience ? '保存中...' : '加入' }}
         </button>
       </div>
-      <div v-if="experiences.length === 0" class="empty-line">暂无经验</div>
-      <div v-else class="experience-grid">
-        <article v-for="item in experiences" :key="item.id" class="experience-item">
-          <div class="experience-top">
-            <span class="weight-chip">权重 {{ item.weight }}</span>
-            <button class="mini-delete" @click="removeExperience(item.id)">删除</button>
+
+      <div v-if="experiences.length === 0" class="empty">
+        <span class="empty-title">暂无经验</span>
+        <span class="text-faint">写入的每条经验都会影响后续 AI 决策</span>
+      </div>
+      <div v-else class="exp-grid">
+        <article v-for="item in experiences" :key="item.id" class="exp-item">
+          <div class="exp-top">
+            <span class="tag tag-brand">权重 {{ item.weight }}</span>
+            <button class="btn btn-ghost btn-sm" @click="removeExperience(item.id)">删除</button>
           </div>
           <p>{{ item.content }}</p>
         </article>
       </div>
     </section>
 
-    <section class="glass-card report-list">
-      <div class="head-row">
-        <h3 class="panel-title">历史报告</h3>
-        <span class="status-chip">{{ reports.length }} 条</span>
+    <!-- Historical reports -->
+    <section class="surface history-card">
+      <header class="card-head">
+        <div>
+          <h3 class="t-title">历史报告</h3>
+          <p class="t-sub">{{ reports.length }} 条</p>
+        </div>
+      </header>
+
+      <div v-if="reports.length === 0" class="empty">
+        <span class="empty-title">暂无报告</span>
       </div>
-      <div v-if="reports.length === 0" class="empty-line">暂无报告</div>
       <div v-else class="report-grid">
-        <article v-for="item in reports" :key="item.id" class="report-card">
-          <div class="report-head">
-            <span class="report-type">{{ typeLabel(item.period_type) }}</span>
-            <strong>{{ item.period_key || '--' }}</strong>
-          </div>
+        <article v-for="item in reports" :key="item.id" class="report-item">
+          <header class="report-top">
+            <span :class="['tag', typeTagClass(item.period_type)]">{{ typeLabel(item.period_type) }}</span>
+            <span class="mono text-faint">{{ item.period_key || '--' }}</span>
+            <button class="btn btn-ghost btn-sm" @click="editReport(item)">编辑</button>
+          </header>
           <h4>{{ item.title || '(未命名报告)' }}</h4>
           <p class="report-summary">{{ item.summary || '--' }}</p>
-          <p class="report-exp"><strong>经验：</strong>{{ item.experience || '--' }}</p>
-          <div class="report-foot">
-            <span>{{ item.created_at_cst || '--' }}</span>
-            <button class="btn-solid btn-ghost compact" @click="editReport(item)">编辑</button>
-          </div>
+          <p v-if="item.experience" class="report-exp"><strong>经验：</strong>{{ item.experience }}</p>
+          <footer class="report-foot">
+            <span class="mono text-faint">{{ item.created_at_cst || '--' }}</span>
+          </footer>
         </article>
       </div>
     </section>
@@ -122,16 +136,14 @@
 </template>
 
 <script setup lang="ts">
-import { reactive, ref } from 'vue';
+import { onMounted, reactive, ref } from 'vue';
 import api from '../../api';
 import { notifyError, notifySuccess } from '../../utils/notify';
 
-const loading = ref(false);
-const savingReport = ref(false);
-const savingExperience = ref(false);
-
 const reports = ref<any[]>([]);
 const experiences = ref<any[]>([]);
+const savingReport = ref(false);
+const savingExperience = ref(false);
 
 const reportForm = reactive({
   id: 0,
@@ -147,12 +159,25 @@ const experienceForm = reactive({
   weight: 70
 });
 
+const periodOptions = [
+  { value: 'DAILY', label: '日报' },
+  { value: 'WEEKLY', label: '周报' },
+  { value: 'MONTHLY', label: '月报' }
+] as const;
+
 const typeLabel = (type: string) => {
   const raw = String(type || '').toUpperCase();
   if (raw === 'DAILY') return '日报';
   if (raw === 'WEEKLY') return '周报';
   if (raw === 'MONTHLY') return '月报';
   return raw || '--';
+};
+const typeTagClass = (type: string) => {
+  const raw = String(type || '').toUpperCase();
+  if (raw === 'DAILY') return 'tag-info';
+  if (raw === 'WEEKLY') return 'tag-warn';
+  if (raw === 'MONTHLY') return 'tag-brand';
+  return 'tag-neutral';
 };
 
 const resetReportForm = () => {
@@ -168,23 +193,13 @@ const loadReports = async () => {
   const res: any = await api.getTradeReports({ page: 1, page_size: 60 });
   reports.value = Array.isArray(res?.items) ? res.items : [];
 };
-
 const loadExperiences = async () => {
   const res: any = await api.getTradeExperiences({ page: 1, page_size: 120 });
   experiences.value = Array.isArray(res?.items) ? res.items : [];
 };
-
-const refreshAll = async () => {
-  loading.value = true;
-  try {
-    await Promise.all([loadReports(), loadExperiences()]);
-  } catch {
-    notifyError('交易报告加载失败', '请稍后重试。');
-  } finally {
-    loading.value = false;
-  }
+const refresh = async () => {
+  await Promise.all([loadReports(), loadExperiences()]);
 };
-
 const saveReport = async () => {
   if (!reportForm.summary.trim() && !reportForm.experience.trim()) {
     notifyError('内容为空', '总结和经验至少填写一项。');
@@ -203,11 +218,8 @@ const saveReport = async () => {
     notifySuccess('报告已保存', reportForm.id ? '报告已更新。' : '报告已创建。');
     resetReportForm();
     await loadReports();
-  } finally {
-    savingReport.value = false;
-  }
+  } finally { savingReport.value = false; }
 };
-
 const editReport = (item: any) => {
   reportForm.id = Number(item?.id || 0);
   reportForm.period_type = (String(item?.period_type || 'DAILY').toUpperCase() as any);
@@ -215,8 +227,8 @@ const editReport = (item: any) => {
   reportForm.title = String(item?.title || '');
   reportForm.summary = String(item?.summary || '');
   reportForm.experience = String(item?.experience || '');
+  window.scrollTo({ top: 0, behavior: 'smooth' });
 };
-
 const saveExperience = async () => {
   const content = experienceForm.content.trim();
   if (!content) {
@@ -231,13 +243,10 @@ const saveExperience = async () => {
     });
     experienceForm.content = '';
     experienceForm.weight = 70;
-    notifySuccess('经验已加入', '后续交易会自动参考这些经验。');
+    notifySuccess('经验已加入', '后续交易会自动参考。');
     await loadExperiences();
-  } finally {
-    savingExperience.value = false;
-  }
+  } finally { savingExperience.value = false; }
 };
-
 const removeExperience = async (id: number) => {
   if (!window.confirm('确认删除该经验？')) return;
   await api.saveTradeExperience({ id, delete: true });
@@ -245,216 +254,47 @@ const removeExperience = async (id: number) => {
   notifySuccess('已删除经验');
 };
 
-refreshAll();
+onMounted(refresh);
 </script>
 
 <style scoped>
-.reports-page {
-  display: grid;
-  gap: 12px;
-}
+.reports-page { display: flex; flex-direction: column; gap: 14px; max-width: 1280px; }
 
-.report-editor,
-.experience-panel,
-.report-list {
-  padding: 12px;
-}
+.editor-card, .exp-card, .history-card { padding: 0; }
+.card-head { padding: 14px 18px; border-bottom: 1px solid var(--line); display: flex; justify-content: space-between; align-items: center; gap: 10px; }
+.t-title { font-size: 14px; font-weight: 700; color: var(--text-strong); }
+.t-sub { font-size: 12px; color: var(--text-muted); margin-top: 2px; }
+.head-actions { display: flex; gap: 6px; }
 
-.head-row {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 10px;
-}
+.editor-grid { padding: 14px 18px; display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; border-bottom: 1px solid var(--line-soft); }
+.editor-card .field:not(.editor-grid .field) { padding: 0 18px 14px; }
+.editor-card .field:last-of-type { padding-bottom: 18px; border-bottom: 1px solid var(--line-soft); }
 
-.panel-sub {
-  margin: 4px 0 0;
-  font-size: 12px;
-  color: var(--text-muted);
+.seg { display: inline-flex; padding: 2px; background: var(--bg-inset); border-radius: var(--r-sm); gap: 2px; }
+.seg-btn {
+  height: 30px; padding: 0 14px; border: 0; background: transparent;
+  font-size: 12.5px; font-weight: 600; color: var(--text-soft); border-radius: var(--r-xs);
+  cursor: pointer;
 }
+.seg-btn.is-active { background: var(--bg-elev); color: var(--text-strong); box-shadow: var(--shadow-1); }
 
-.editor-grid {
-  margin-top: 10px;
-  display: grid;
-  gap: 8px;
-  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-}
+@media (max-width: 780px) { .editor-grid { grid-template-columns: 1fr; } }
 
-.field-block {
-  display: grid;
-  gap: 6px;
-}
+.exp-input { padding: 14px 18px; display: grid; grid-template-columns: 1fr 110px auto; gap: 8px; border-bottom: 1px solid var(--line-soft); }
+.weight-input { text-align: center; }
+@media (max-width: 720px) { .exp-input { grid-template-columns: 1fr; } }
 
-.field-label {
-  font-size: 12px;
-  color: var(--text-soft);
-}
+.exp-grid { padding: 14px 18px; display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 8px; }
+.exp-item { padding: 10px 12px; border: 1px solid var(--line); border-radius: var(--r-sm); background: var(--bg-subtle); display: flex; flex-direction: column; gap: 6px; }
+.exp-top { display: flex; justify-content: space-between; align-items: center; }
+.exp-item p { font-size: 12.5px; color: var(--text); line-height: 1.55; }
 
-.field-input {
-  width: 100%;
-  border: 1px solid var(--line-strong);
-  border-radius: var(--radius-sm);
-  padding: 10px 11px;
-  font-size: 13px;
-  background: #fff;
-  outline: none;
-}
-
-.field-input:focus {
-  border-color: var(--brand);
-  box-shadow: 0 0 0 2px rgba(16, 163, 127, 0.12);
-}
-
-.field-textarea {
-  resize: vertical;
-  min-height: 92px;
-}
-
-.action-row {
-  margin-top: 10px;
-  display: flex;
-  gap: 8px;
-  flex-wrap: wrap;
-}
-
-.experience-editor {
-  margin-top: 10px;
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) 110px auto;
-  gap: 8px;
-}
-
-.weight-input {
-  text-align: center;
-}
-
-.experience-grid {
-  margin-top: 10px;
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
-  gap: 8px;
-}
-
-.experience-item {
-  border: 1px solid var(--line);
-  border-radius: var(--radius-sm);
-  background: var(--surface-soft);
-  padding: 8px;
-  display: grid;
-  gap: 6px;
-}
-
-.experience-top {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-}
-
-.weight-chip {
-  border: 1px solid #a7f3d0;
-  background: #f0fdf4;
-  color: #065f46;
-  border-radius: 999px;
-  padding: 2px 8px;
-  font-size: 11px;
-  font-weight: 700;
-}
-
-.mini-delete {
-  border: 1px solid var(--line);
-  border-radius: var(--radius-sm);
-  padding: 2px 7px;
-  font-size: 11px;
-  color: #9f1239;
-  background: #fff1f2;
-}
-
-.experience-item p {
-  margin: 0;
-  font-size: 12px;
-  color: var(--text-soft);
-  line-height: 1.5;
-}
-
-.report-grid {
-  margin-top: 10px;
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-  gap: 10px;
-  align-items: start;
-}
-
-.report-card {
-  border: 1px solid var(--line);
-  border-radius: var(--radius-sm);
-  background:
-    radial-gradient(500px 120px at 0% 0%, rgba(16, 163, 127, 0.08), transparent 60%),
-    #fff;
-  padding: 10px;
-  display: grid;
-  gap: 8px;
-}
-
-.report-head {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 8px;
-}
-
-.report-type {
-  border-radius: 999px;
-  border: 1px solid #d1fae5;
-  background: #ecfdf5;
-  color: #065f46;
-  font-size: 10px;
-  font-weight: 800;
-  padding: 2px 8px;
-}
-
-.report-head strong {
-  font-size: 12px;
-  color: var(--text-soft);
-  font-family: 'JetBrains Mono', monospace;
-}
-
-.report-card h4 {
-  margin: 0;
-  font-size: 14px;
-}
-
-.report-summary,
-.report-exp {
-  margin: 0;
-  font-size: 12px;
-  color: var(--text-soft);
-  line-height: 1.55;
-  white-space: pre-wrap;
-}
-
-.report-foot {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 8px;
-  font-size: 11px;
-  color: var(--text-muted);
-}
-
-.compact {
-  padding: 4px 8px;
-  font-size: 11px;
-}
-
-.empty-line {
-  padding: 14px 4px;
-  color: var(--text-muted);
-  font-size: 12px;
-}
-
-@media (max-width: 820px) {
-  .experience-editor {
-    grid-template-columns: 1fr;
-  }
-}
+.history-card { padding: 0; }
+.report-grid { padding: 14px 18px; display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 10px; }
+.report-item { padding: 12px 14px; border: 1px solid var(--line); border-radius: var(--r-md); background: var(--bg-elev); display: flex; flex-direction: column; gap: 6px; }
+.report-top { display: flex; justify-content: space-between; align-items: center; gap: 6px; }
+.report-item h4 { font-size: 13.5px; font-weight: 700; color: var(--text-strong); }
+.report-summary { font-size: 12.5px; color: var(--text-soft); line-height: 1.55; white-space: pre-wrap; max-height: 4.6em; overflow: hidden; }
+.report-exp { font-size: 12px; color: var(--text-muted); line-height: 1.5; padding-top: 4px; border-top: 1px dashed var(--line-soft); }
+.report-foot { display: flex; justify-content: space-between; align-items: center; font-size: 11px; color: var(--text-faint); }
 </style>

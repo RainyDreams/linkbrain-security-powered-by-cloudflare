@@ -1,47 +1,36 @@
 ﻿<template>
-  <div class="toast-root">
-    <transition-group name="toast" tag="div" class="toast-stack">
-      <article
-        v-for="item in noticeState.items"
-        :key="item.id"
-        class="toast-item"
-        :class="toastClass[item.type]"
-      >
-        <div class="toast-icon" :class="iconClass[item.type]">{{ iconText[item.type] }}</div>
-        <div class="toast-main">
-          <div class="toast-top">
-            <h4>{{ item.title }}</h4>
-            <span>{{ formatClock(item.createdAt) }}</span>
+  <Teleport to="body">
+    <div class="toast-root">
+      <transition-group name="toast" tag="div" class="toast-stack">
+        <article
+          v-for="item in noticeState.items"
+          :key="item.id"
+          class="toast-item"
+          :data-type="item.type"
+        >
+          <div class="toast-icon">{{ iconText[item.type] }}</div>
+          <div class="toast-main">
+            <div class="toast-top">
+              <h4>{{ item.title }}</h4>
+              <span class="mono">{{ formatClock(item.createdAt) }}</span>
+            </div>
+            <p v-if="item.message">{{ item.message }}</p>
+            <div class="toast-foot">
+              <span v-if="item.code" class="toast-code mono">code {{ item.code }}</span>
+              <span v-if="item.hint" class="toast-hint">{{ item.hint }}</span>
+              <button class="btn btn-ghost btn-sm" @click="dismissNotice(item.id)">关闭</button>
+            </div>
           </div>
-          <p v-if="item.message">{{ item.message }}</p>
-          <div class="toast-foot">
-            <span v-if="item.code" class="toast-code">Code {{ item.code }}</span>
-            <button @click="dismissNotice(item.id)">关闭</button>
-          </div>
-        </div>
-      </article>
-    </transition-group>
-  </div>
+        </article>
+      </transition-group>
+    </div>
+  </Teleport>
 </template>
 
 <script setup lang="ts">
 import { dismissNotice, noticeState } from '../utils/notify';
 
-const toastClass = {
-  success: 'toast-success',
-  error: 'toast-error',
-  info: 'toast-info',
-  warning: 'toast-warning'
-};
-
-const iconClass = {
-  success: 'icon-success',
-  error: 'icon-error',
-  info: 'icon-info',
-  warning: 'icon-warning'
-};
-
-const iconText = {
+const iconText: Record<string, string> = {
   success: '✓',
   error: '!',
   info: 'i',
@@ -59,49 +48,38 @@ const formatClock = (ts: number) => {
 
 <style scoped>
 .toast-root {
-  pointer-events: none;
   position: fixed;
-  inset-inline: 0;
-  top: 10px;
+  top: 12px;
+  left: 0;
+  right: 0;
   z-index: 120;
   display: flex;
   justify-content: center;
-  padding: 0 10px;
+  padding: 0 12px;
+  pointer-events: none;
 }
-
 .toast-stack {
-  width: min(480px, 100%);
+  width: min(440px, 100%);
   display: grid;
   gap: 8px;
 }
-
 .toast-item {
   pointer-events: auto;
   display: grid;
-  grid-template-columns: auto 1fr;
+  grid-template-columns: 24px 1fr;
   gap: 10px;
+  align-items: start;
+  background: var(--bg-elev);
   border: 1px solid var(--line);
-  border-radius: var(--radius-md);
-  background: #fff;
-  padding: 10px;
-  box-shadow: 0 10px 24px rgba(8, 20, 38, 0.15);
+  border-radius: var(--r-md);
+  padding: 10px 12px;
+  box-shadow: var(--shadow-3);
+  border-left: 3px solid var(--line-strong);
 }
-
-.toast-success {
-  border-color: #abefc6;
-}
-
-.toast-error {
-  border-color: #fecdca;
-}
-
-.toast-info {
-  border-color: #a7f3d0;
-}
-
-.toast-warning {
-  border-color: #fedf89;
-}
+.toast-item[data-type="success"] { border-left-color: var(--up); }
+.toast-item[data-type="error"]   { border-left-color: var(--down); }
+.toast-item[data-type="info"]    { border-left-color: var(--info); }
+.toast-item[data-type="warning"] { border-left-color: var(--warn); }
 
 .toast-icon {
   width: 22px;
@@ -111,100 +89,73 @@ const formatClock = (ts: number) => {
   align-items: center;
   justify-content: center;
   font-size: 12px;
-  font-weight: 800;
-  margin-top: 1px;
+  font-weight: 700;
+  background: var(--bg-inset);
+  color: var(--text-soft);
 }
-
-.icon-success {
-  color: #067647;
-  background: #dafbe9;
-}
-
-.icon-error {
-  color: #b42318;
-  background: #fee4e2;
-}
-
-.icon-info {
-  color: #0f766e;
-  background: #f0fdf4;
-}
-
-.icon-warning {
-  color: #b54708;
-  background: #fffaeb;
-}
-
-.toast-main {
-  min-width: 0;
-}
+.toast-item[data-type="success"] .toast-icon { background: var(--up-soft); color: var(--up); }
+.toast-item[data-type="error"]   .toast-icon { background: var(--down-soft); color: var(--down); }
+.toast-item[data-type="info"]    .toast-icon { background: var(--info-soft); color: var(--info); }
+.toast-item[data-type="warning"] .toast-icon { background: var(--warn-soft); color: var(--warn); }
 
 .toast-top {
   display: flex;
   justify-content: space-between;
+  align-items: baseline;
   gap: 8px;
-  align-items: center;
 }
-
 .toast-top h4 {
   margin: 0;
-  font-size: 14px;
-  font-weight: 800;
+  font-size: 13px;
+  font-weight: 700;
   color: var(--text);
 }
-
 .toast-top span {
   font-size: 11px;
   color: var(--text-muted);
 }
-
 .toast-main p {
-  margin: 6px 0 0;
-  font-size: 13px;
+  margin: 5px 0 0;
+  font-size: 12.5px;
   color: var(--text-soft);
   line-height: 1.5;
+  word-break: break-word;
 }
-
 .toast-foot {
-  margin-top: 7px;
+  margin-top: 6px;
   display: flex;
-  justify-content: space-between;
   align-items: center;
   gap: 8px;
+  flex-wrap: wrap;
 }
-
 .toast-code {
+  font-size: 10.5px;
+  color: var(--text-muted);
+  background: var(--bg-inset);
+  border-radius: 4px;
+  padding: 1px 6px;
+}
+.toast-hint {
   font-size: 11px;
   color: var(--text-muted);
-  border: 1px solid var(--line);
-  border-radius: var(--radius-sm);
-  padding: 2px 8px;
-}
-
-.toast-foot button {
-  border: 0;
-  background: transparent;
-  color: var(--text-soft);
-  font-size: 12px;
-  font-weight: 700;
-  cursor: pointer;
+  flex: 1;
+  min-width: 0;
 }
 
 .toast-enter-active,
 .toast-leave-active {
-  transition: all 0.2s ease;
+  transition: opacity 0.18s ease, transform 0.18s ease;
 }
-
 .toast-enter-from,
 .toast-leave-to {
   opacity: 0;
   transform: translateY(-8px);
 }
 
-@media (max-width: 640px) {
+@media (max-width: 720px) {
   .toast-root {
     top: auto;
-    bottom: 10px;
+    bottom: 12px;
   }
 }
 </style>

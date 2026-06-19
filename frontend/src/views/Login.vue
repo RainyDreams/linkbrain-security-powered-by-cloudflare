@@ -1,64 +1,99 @@
 ﻿<template>
-  <div class="oa-login-shell">
-    <div class="oa-login-layout">
-      <section class="brand-card fade-rise">
-        <p class="brand-kicker">ZERO BEN ADMIN</p>
-        <h1>管理终端登录</h1>
-        <p class="brand-sub">简洁、安全、可审计的管理入口</p>
-
-        <div class="feature-list">
-          <article class="feature-item">
-            <span>交易执行</span>
-            <strong>实时下单与撤单</strong>
-          </article>
-          <article class="feature-item">
-            <span>风控检查</span>
-            <strong>仓位与资金联动校验</strong>
-          </article>
-          <article class="feature-item">
-            <span>审计追踪</span>
-            <strong>关键操作全程留痕</strong>
-          </article>
-        </div>
-      </section>
-
-      <section class="login-card fade-rise">
-        <div class="login-head">
-          <p>Admin Access</p>
-          <h2>身份验证</h2>
-          <span>请输入管理员密码进入交易管理终端</span>
-        </div>
-
-        <form class="login-form" @submit.prevent="login">
-          <label class="label" for="admin-pwd">管理员密码</label>
-          <div class="field-wrap">
-            <input
-              id="admin-pwd"
-              v-model="pwd"
-              :type="showPwd ? 'text' : 'password'"
-              autocomplete="current-password"
-              class="field"
-              placeholder="请输入密码"
-              @keyup.enter="login"
-            />
-            <button type="button" class="toggle-btn" @click="showPwd = !showPwd">
-              {{ showPwd ? '隐藏' : '显示' }}
-            </button>
+  <div class="login-shell">
+    <div class="login-canvas">
+      <div class="login-grid">
+        <section class="brand-panel">
+          <div class="brand-mark">
+            <svg viewBox="0 0 24 24" width="22" height="22" fill="none">
+              <path d="M3 17l4-6 4 4 5-7 5 9" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+              <circle cx="3" cy="17" r="1.4" fill="currentColor"/>
+              <circle cx="7" cy="11" r="1.4" fill="currentColor"/>
+              <circle cx="11" cy="15" r="1.4" fill="currentColor"/>
+              <circle cx="16" cy="8" r="1.4" fill="currentColor"/>
+              <circle cx="21" cy="17" r="1.4" fill="currentColor"/>
+            </svg>
+            <span>Zero Ben Securities</span>
           </div>
 
-          <button class="submit-btn" type="submit" :disabled="loading">
-            <span v-if="loading" class="spinner"></span>
-            {{ loading ? '登录中...' : '进入管理端' }}
-          </button>
-        </form>
+          <h1>AI-Native 交易终端</h1>
+          <p class="brand-sub">集成实时行情、风控与多 Agent 投研的 A 股交易演示平台</p>
 
-        <div class="tip">提示: 频繁失败尝试会触发限流保护。</div>
+          <ul class="feature-list">
+            <li>
+              <div class="feat-dot"></div>
+              <div>
+                <strong>实时撮合与价格笼子</strong>
+                <span>主创/科创/北交所差异化价格笼子，违规订单自动暂存或拒收</span>
+              </div>
+            </li>
+            <li>
+              <div class="feat-dot"></div>
+              <div>
+                <strong>多角色 AI 投研委员会</strong>
+                <span>总裁 / 经济学家×2 / 经理的辩论决策，每轮产出可执行委托</span>
+              </div>
+            </li>
+            <li>
+              <div class="feat-dot"></div>
+              <div>
+                <strong>双轨审计与风控体检</strong>
+                <span>技术 + 财务双审计、冻结资金对账、持仓完整性自动检查</span>
+              </div>
+            </li>
+          </ul>
 
-        <div class="footer-row">
-          <span>仅管理员可执行交易与资金操作</span>
-          <router-link to="/">返回公开页</router-link>
-        </div>
-      </section>
+          <div class="brand-meta">
+            <span>实盘交易日 · 09:30-11:30 / 13:00-15:00</span>
+            <span>T+1 结算 / 100 股一手</span>
+          </div>
+        </section>
+
+        <section class="login-panel surface">
+          <header class="login-header">
+            <p class="login-kicker">Admin Access</p>
+            <h2>身份验证</h2>
+            <p class="login-hint">仅管理员可进入交易管理终端</p>
+          </header>
+
+          <form class="login-form" @submit.prevent="login">
+            <div class="field">
+              <label class="field-label" for="admin-pwd">管理员密码</label>
+              <div class="input-group">
+                <input
+                  id="admin-pwd"
+                  v-model="pwd"
+                  :type="showPwd ? 'text' : 'password'"
+                  autocomplete="current-password"
+                  class="input input-mono"
+                  placeholder="请输入密码"
+                  @keyup.enter="login"
+                />
+                <button type="button" class="input-group-affix" @click="showPwd = !showPwd">
+                  {{ showPwd ? '隐藏' : '显示' }}
+                </button>
+              </div>
+            </div>
+
+            <button class="btn btn-primary btn-lg btn-block" type="submit" :disabled="loading">
+              <span v-if="loading" class="spinner"></span>
+              <span>{{ loading ? '登录中...' : '进入管理端' }}</span>
+            </button>
+          </form>
+
+          <div class="login-tip">
+            <svg viewBox="0 0 24 24" width="14" height="14" fill="none">
+              <circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="1.6"/>
+              <path d="M12 8v5M12 16h.01" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
+            </svg>
+            <span>提示：5 次失败登录将触发 30 分钟 IP 级限流</span>
+          </div>
+
+          <footer class="login-foot">
+            <span>Zero Ben · Trading Terminal</span>
+            <router-link to="/">返回公开页</router-link>
+          </footer>
+        </section>
+      </div>
     </div>
   </div>
 </template>
@@ -68,7 +103,6 @@ import { ref } from 'vue';
 import { useRouter } from 'vue-router';
 import { useMarketStore } from '../stores/market';
 import api from '../api';
-import { notifyError, notifySuccess } from '../utils/notify';
 
 const pwd = ref('');
 const showPwd = ref(false);
@@ -78,19 +112,14 @@ const store = useMarketStore();
 
 const login = async () => {
   const input = pwd.value.trim();
-  if (!input) {
-    notifyError('请输入管理员密码');
-    return;
-  }
-
+  if (!input) return;
   loading.value = true;
   try {
     const res: any = await api.login(input);
     store.setToken(res.token);
-    notifySuccess('登录成功', '已进入管理终端。');
-    router.push('/admin/buy');
+    router.push('/admin/trade');
   } catch {
-    // error notice is handled by API interceptor
+    // error handled by API interceptor
   } finally {
     loading.value = false;
   }
@@ -98,253 +127,181 @@ const login = async () => {
 </script>
 
 <style scoped>
-.oa-login-shell {
+.login-shell {
   min-height: 100vh;
-  width: min(1240px, 100%);
-  margin: 0 auto;
-  padding: 12px;
   display: flex;
   align-items: center;
-  color: #111827;
   background:
-    radial-gradient(860px 300px at 12% -20%, rgba(16, 163, 127, 0.08), transparent 62%),
-    #f8fafc;
+    radial-gradient(900px 400px at 0% 0%, rgba(16, 163, 127, 0.07), transparent 60%),
+    radial-gradient(700px 380px at 100% 100%, rgba(37, 99, 235, 0.05), transparent 65%),
+    var(--bg);
+  padding: 24px 16px;
 }
-
-.oa-login-layout {
+.login-canvas {
   width: 100%;
+  max-width: 1100px;
+  margin: 0 auto;
+}
+.login-grid {
   display: grid;
-  gap: 12px;
+  grid-template-columns: 1fr;
+  gap: 16px;
 }
 
-.brand-card,
-.login-card {
-  border: 1px solid #e5eaf0;
-  border-radius: 14px;
-  background: #ffffff;
-  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04), 0 10px 30px rgba(15, 23, 42, 0.05);
-  padding: 16px;
-}
-
-.brand-kicker {
-  margin: 0;
-  font-size: 10px;
-  letter-spacing: 0.18em;
-  text-transform: uppercase;
-  color: #6b7280;
-}
-
-.brand-card h1 {
-  margin: 10px 0 0;
-  font-size: 34px;
-  line-height: 1.12;
-  font-weight: 800;
-  color: #0f172a;
-}
-
-.brand-sub {
-  margin: 8px 0 0;
-  font-size: 14px;
-  color: #64748b;
-}
-
-.feature-list {
-  margin-top: 16px;
-  display: grid;
-  gap: 8px;
-}
-
-.feature-item {
-  border: 1px solid #e6ecf3;
-  border-radius: 10px;
-  background: #fbfdff;
-  padding: 10px 12px;
+/* Brand panel */
+.brand-panel {
+  padding: 28px 24px;
   display: flex;
-  justify-content: space-between;
-  gap: 10px;
+  flex-direction: column;
+  gap: 20px;
+  border-radius: var(--r-xl);
+  background: var(--bg-elev);
+  border: 1px solid var(--line);
+  box-shadow: var(--shadow-1);
 }
-
-.feature-item span {
-  font-size: 12px;
-  color: #64748b;
-}
-
-.feature-item strong {
-  font-size: 12px;
-  color: #0f172a;
-}
-
-.login-card {
-  display: grid;
-  gap: 12px;
-}
-
-.login-head {
-  border: 1px solid #e6ecf3;
-  border-radius: 10px;
-  background: #fbfdff;
-  padding: 11px 12px;
-}
-
-.login-head p {
-  margin: 0;
-  font-size: 10px;
-  text-transform: uppercase;
-  letter-spacing: 0.2em;
-  color: #64748b;
-}
-
-.login-head h2 {
-  margin: 6px 0 0;
-  font-size: 24px;
-  line-height: 1.2;
-  font-weight: 800;
-  color: #0f172a;
-}
-
-.login-head span {
-  margin-top: 4px;
-  display: block;
-  font-size: 12px;
-  color: #64748b;
-}
-
-.login-form {
-  display: grid;
-  gap: 10px;
-}
-
-.label {
-  font-size: 13px;
-  font-weight: 700;
-  color: #334155;
-}
-
-.field-wrap {
-  display: grid;
-  grid-template-columns: 1fr auto;
-  gap: 8px;
-}
-
-.field {
-  width: 100%;
-  border: 1px solid #d7e0ea;
-  border-radius: 10px;
-  padding: 11px 12px;
-  font-size: 14px;
-  outline: none;
-  background: #ffffff;
-  color: #0f172a;
-}
-
-.field::placeholder {
-  color: #94a3b8;
-}
-
-.field:focus {
-  border-color: #10a37f;
-  box-shadow: 0 0 0 2px rgba(16, 163, 127, 0.12);
-}
-
-.toggle-btn {
-  border: 1px solid #d7e0ea;
-  border-radius: 10px;
-  background: #ffffff;
-  color: #334155;
-  min-width: 66px;
-  font-size: 12px;
-  font-weight: 700;
-}
-
-.submit-btn {
-  width: 100%;
-  border: 1px solid #0f8f6f;
-  border-radius: 10px;
-  padding: 10px 12px;
-  font-size: 13px;
-  font-weight: 800;
-  color: #ffffff;
-  background: linear-gradient(180deg, #16b58d 0%, #10a37f 100%);
+.brand-mark {
   display: inline-flex;
   align-items: center;
-  justify-content: center;
   gap: 8px;
-}
-
-.submit-btn:disabled {
-  opacity: 0.62;
-}
-
-.tip {
-  border: 1px solid #e6ecf3;
-  border-radius: 10px;
-  background: #fbfdff;
-  color: #64748b;
   font-size: 12px;
+  font-weight: 700;
+  color: var(--text-strong);
+  letter-spacing: 0.04em;
+}
+.brand-mark svg {
+  background: var(--text);
+  color: #fff;
+  border-radius: var(--r-sm);
+  padding: 4px;
+}
+.brand-panel h1 {
+  font-size: 32px;
+  line-height: 1.12;
+  letter-spacing: -0.02em;
+  font-weight: 800;
+  color: var(--text-strong);
+}
+.brand-sub {
+  font-size: 14px;
+  color: var(--text-soft);
+  line-height: 1.55;
+  max-width: 460px;
+}
+.feature-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 14px;
+}
+.feature-list li {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+}
+.feat-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  background: var(--text);
+  margin-top: 7px;
+  flex-shrink: 0;
+}
+.feature-list strong {
+  display: block;
+  font-size: 13.5px;
+  color: var(--text-strong);
+  font-weight: 700;
+  margin-bottom: 2px;
+}
+.feature-list span {
+  font-size: 12.5px;
+  color: var(--text-muted);
+  line-height: 1.55;
+}
+.brand-meta {
+  display: flex;
+  gap: 14px;
+  flex-wrap: wrap;
+  font-size: 11.5px;
+  color: var(--text-muted);
+  border-top: 1px solid var(--line-soft);
+  padding-top: 16px;
+  font-family: 'JetBrains Mono', monospace;
+}
+
+/* Login panel */
+.login-panel {
+  padding: 28px 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+.login-header {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.login-kicker {
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.16em;
+  color: var(--text-muted);
+  text-transform: uppercase;
+}
+.login-header h2 {
+  font-size: 22px;
+  font-weight: 800;
+  color: var(--text-strong);
+  letter-spacing: -0.01em;
+}
+.login-hint {
+  font-size: 13px;
+  color: var(--text-muted);
+}
+.login-form {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.login-tip {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--text-muted);
+  background: var(--bg-subtle);
+  border: 1px solid var(--line-soft);
+  border-radius: var(--r-sm);
   padding: 8px 10px;
 }
-
-.footer-row {
+.login-foot {
   display: flex;
+  align-items: center;
   justify-content: space-between;
-  gap: 8px;
   font-size: 12px;
-  color: #64748b;
+  color: var(--text-muted);
+  padding-top: 8px;
+  border-top: 1px solid var(--line-soft);
 }
-
-.footer-row a {
-  color: #0f8f6f;
-  font-weight: 700;
+.login-foot a {
+  color: var(--text-strong);
+  font-weight: 600;
 }
+.login-foot a:hover { text-decoration: underline; }
 
-.spinner {
-  width: 14px;
-  height: 14px;
-  border-radius: 999px;
-  border: 2px solid rgba(255, 255, 255, 0.5);
-  border-top-color: #ffffff;
-  display: inline-block;
-  animation: spin 0.8s linear infinite;
-}
-
-@keyframes spin {
-  to {
-    transform: rotate(360deg);
-  }
-}
-
-@media (min-width: 1000px) {
-  .oa-login-layout {
+@media (min-width: 880px) {
+  .login-grid {
     grid-template-columns: 1.1fr 0.9fr;
+    align-items: stretch;
   }
-
-  .brand-card,
-  .login-card {
-    padding: 18px;
-  }
+  .brand-panel h1 { font-size: 36px; }
+  .login-panel { padding: 32px 28px; }
 }
 
 @media (max-width: 720px) {
-  .oa-login-shell {
-    padding: 8px;
-    align-items: stretch;
-  }
-
-  .brand-card h1 {
-    font-size: 28px;
-  }
-
-  .field-wrap {
-    grid-template-columns: 1fr;
-  }
-
-  .toggle-btn {
-    min-height: 36px;
-  }
-
-  .footer-row {
-    flex-direction: column;
-    align-items: flex-start;
-  }
+  .brand-panel { padding: 22px 18px; }
+  .brand-panel h1 { font-size: 26px; }
+  .login-panel { padding: 22px 18px; }
 }
 </style>

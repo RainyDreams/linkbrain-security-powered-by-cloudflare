@@ -1,348 +1,262 @@
 ﻿<template>
-  <div class="oa-shell">
-    <header class="oa-topbar fade-rise">
-      <div class="brand-block">
-        <p class="brand-kicker">ZERO BEN SECURITIES</p>
-        <h1>公开市场看板</h1>
-        <p class="brand-sub">资产、成交、持仓与评论的实时总览</p>
+  <div class="pub-shell">
+    <!-- Top bar -->
+    <header class="pub-topbar">
+      <div class="pub-brand">
+        <svg viewBox="0 0 24 24" width="20" height="20" fill="none">
+          <path d="M3 17l4-6 4 4 5-7 5 9" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+        <div class="pub-brand-text">
+          <span class="pub-brand-name">Zero Ben Securities</span>
+          <span class="pub-brand-sub">AI-Native 交易演示平台</span>
+        </div>
       </div>
-
-      <div class="meta-block">
-        <span class="state-chip" :class="marketOpen ? 'live' : 'closed'">
+      <div class="pub-meta">
+        <span :class="['status-pill', marketOpen ? 'open' : 'closed']">
+          <span class="status-dot"></span>
           {{ marketOpen ? '交易时段' : '非交易时段' }}
         </span>
-        <span class="mono">{{ nowText }}（上海）</span>
-        <span class="sync-text">最近刷新 {{ lastSyncText }}</span>
-      </div>
-
-      <div class="action-block">
-        <button class="btn btn-ghost" :disabled="syncing" @click="refreshOverview">
-          {{ syncing ? '刷新中...' : '刷新数据' }}
-        </button>
-        <button class="btn btn-primary" @click="$router.push('/login')">管理登录</button>
+        <span class="mono pub-clock">{{ nowText }}</span>
+        <span class="text-faint pub-sync">最近刷新 {{ lastSyncText }}</span>
+        <button class="btn btn-secondary btn-sm" :disabled="syncing" @click="refreshOverview">{{ syncing ? '刷新中…' : '刷新' }}</button>
+        <router-link to="/login" class="btn btn-primary btn-sm">管理登录</router-link>
       </div>
     </header>
 
-    <section class="stats-grid fade-rise">
-      <article class="stat-card">
-        <span class="stat-label">总资产</span>
-        <strong class="stat-value">¥{{ formatMoney(data.assets.total) }}</strong>
-      </article>
-      <article class="stat-card">
-        <span class="stat-label">持仓市值</span>
-        <strong class="stat-value">¥{{ formatMoney(data.assets.market_cap) }}</strong>
-      </article>
-      <article class="stat-card">
-        <span class="stat-label">可用资金</span>
-        <strong class="stat-value">¥{{ formatMoney(data.assets.balance) }}</strong>
-      </article>
-      <article class="stat-card">
-        <span class="stat-label">冻结资金</span>
-        <strong class="stat-value">¥{{ formatMoney(data.assets.frozen) }}</strong>
-      </article>
-      <article class="stat-card">
-        <span class="stat-label">当日收益</span>
-        <strong class="stat-value" :class="Number(data.assets.day_pnl) >= 0 ? 'up' : 'down'">
-          ¥{{ formatMoney(data.assets.day_pnl) }}
-        </strong>
-      </article>
-      <article class="stat-card">
-        <span class="stat-label">累计收益率</span>
-        <strong class="stat-value" :class="Number(data.assets.return_total_pct) >= 0 ? 'up' : 'down'">
-          {{ formatPct(data.assets.return_total_pct) }}
-        </strong>
-      </article>
-    </section>
-
-    <section class="main-grid">
-      <article class="panel chart-panel fade-rise">
-        <div class="panel-head">
-          <div>
-            <h2>资产曲线</h2>
-            <p>{{ chartEmpty ? '暂无图表数据' : `样本 ${chartPoints.length} 条` }}</p>
-          </div>
-          <span class="head-chip">最新资产 ¥{{ formatMoney(latestAssetValue) }}</span>
-        </div>
-        <div ref="chartRef" class="chart-box"></div>
-      </article>
-
-      <aside class="side-grid fade-rise">
-        <article class="panel feed-panel">
-          <div class="panel-head">
-            <div>
-              <h2>成交播报</h2>
-              <p>最近交易动态</p>
-            </div>
-            <span class="head-chip">{{ data.logs.length }} 条</span>
-            <button class="fold-btn" @click="toggleSection('feed')">
-              {{ isSectionOpen('feed') ? '收起' : '展开' }}
-            </button>
-          </div>
-
-          <transition name="panel-fold">
-            <div v-show="isSectionOpen('feed')" class="feed-list scrollbar-thin">
-              <div v-if="data.logs.length === 0" class="empty">暂无成交</div>
-              <article v-for="(log, idx) in data.logs" :key="idx" class="feed-item">
-                <div class="feed-top">
-                  <span class="side-pill" :class="log.side === 'BUY' ? 'pill-buy' : 'pill-sell'">
-                    {{ log.side === 'BUY' ? '买入' : '卖出' }}
-                  </span>
-                  <span class="mono">{{ log.time || '--:--:--' }}</span>
-                </div>
-                <div class="feed-main">{{ log.text || '--' }}</div>
-                <div class="feed-sub">{{ log.detail || '' }}</div>
-              </article>
-            </div>
-          </transition>
-        </article>
-
-        <article class="panel ai-panel">
-          <div class="panel-head">
-            <div>
-              <h2>AI 自动交易引擎</h2>
-              <p>公开展示最近一次 AI 投研讨论与执行结论</p>
-            </div>
-            <span class="head-chip" :class="data.ai?.enabled ? 'chip-ai-on' : 'chip-ai-off'">
-              {{ data.ai?.enabled ? 'AUTO ON' : 'AUTO OFF' }}
-            </span>
-            <button class="fold-btn" @click="toggleSection('ai')">
-              {{ isSectionOpen('ai') ? '收起' : '展开' }}
-            </button>
-          </div>
-
-          <transition name="panel-fold">
-            <div v-show="isSectionOpen('ai')">
-              <div v-if="!aiLatest" class="empty">暂无 AI 运行记录</div>
-              <div v-else class="ai-content">
-                <div class="ai-topline">
-                  <span class="state-chip" :class="aiLatest.status === 'SUCCESS' ? 'live' : 'closed'">{{ aiLatest.status || '--' }}</span>
-                  <span class="mono">run {{ aiLatest.run_id || '--' }}</span>
-                  <span class="mono">{{ aiLatest.created_at_cst || '--' }}</span>
-                </div>
-
-                <div class="ai-metrics">
-                  <span>触发 {{ aiLatest.trigger || '--' }}</span>
-                  <span>阶段 {{ aiLatest.phase || '--' }}</span>
-                  <span>胜出 {{ aiLatest.manager_winner || '--' }}</span>
-                  <span>执行 {{ aiLatest.executed_total || 0 }}/{{ aiLatest.actions_total || 0 }}</span>
-                </div>
-
-                <div v-if="aiLatest.skipped" class="ai-skip-box">
-                  <p><strong>本次跳过：</strong>{{ aiLatest.reason || '未返回具体原因' }}</p>
-                  <p v-if="Number(aiLatest.blocked_count || 0) > 0">
-                    <strong>阻断项：</strong>{{ aiLatest.blocked_count }}
-                  </p>
-                  <ul v-if="aiSkipReasons.length > 0" class="ai-skip-list">
-                    <li v-for="(item, idx) in aiSkipReasons" :key="`${idx}-${item}`">{{ item }}</li>
-                  </ul>
-                </div>
-
-                <div class="ai-brief">
-                  <p><strong>经理结论：</strong>{{ aiDiscussion?.manager?.decision_reason || '--' }}</p>
-                  <p><strong>长期：</strong>{{ aiHorizons.long_term || '--' }}</p>
-                  <p><strong>中期：</strong>{{ aiHorizons.mid_term || '--' }}</p>
-                  <p><strong>短期：</strong>{{ aiHorizons.short_term || '--' }}</p>
-                  <p><strong>做T：</strong>{{ aiHorizons.intraday_t || '--' }}</p>
-                  <p><strong>T+1：</strong>{{ aiDiscussion?.president?.t_plus_one_note || '--' }}</p>
-                </div>
-
-                <ul v-if="aiNewsReferences.length > 0" class="ai-news">
-                  <li v-for="item in aiNewsReferences" :key="`${item.index}-${item.title}`">
-                    <a :href="item.link" target="_blank" rel="noopener noreferrer">{{ item.title }}</a>
-                  </li>
-                </ul>
+    <div class="pub-page">
+      <!-- Hero -->
+      <section class="pub-hero surface">
+        <div class="hero-grid">
+          <div class="hero-main">
+            <p class="kicker">组合总览</p>
+            <h1 class="hero-amount num">
+              <span class="amount-symbol">¥</span>{{ formatMoney(data.assets.total) }}
+            </h1>
+            <div class="hero-stats">
+              <div class="hero-stat">
+                <span class="hs-label">当日盈亏</span>
+                <span class="hs-value num" :class="Number(data.assets.day_pnl) >= 0 ? 'num-up' : 'num-down'">
+                  {{ Number(data.assets.day_pnl) >= 0 ? '+' : '' }}{{ formatMoney(data.assets.day_pnl) }}
+                  <em>{{ formatPct(data.assets.day_pct) }}</em>
+                </span>
+              </div>
+              <div class="hero-stat">
+                <span class="hs-label">累计收益</span>
+                <span class="hs-value num" :class="Number(data.assets.return_total_pct) >= 0 ? 'num-up' : 'num-down'">
+                  {{ formatPct(data.assets.return_total_pct) }}
+                </span>
+              </div>
+              <div class="hero-stat">
+                <span class="hs-label">证券市值</span>
+                <span class="hs-value num">¥{{ formatMoney(data.assets.market_cap) }}</span>
+              </div>
+              <div class="hero-stat">
+                <span class="hs-label">可用资金</span>
+                <span class="hs-value num">¥{{ formatMoney(data.assets.balance) }}</span>
+              </div>
+              <div class="hero-stat">
+                <span class="hs-label">冻结资金</span>
+                <span class="hs-value num text-muted">¥{{ formatMoney(data.assets.frozen) }}</span>
+              </div>
+              <div class="hero-stat">
+                <span class="hs-label">持仓浮盈</span>
+                <span class="hs-value num" :class="Number(data.assets.pnl_holding) >= 0 ? 'num-up' : 'num-down'">
+                  {{ Number(data.assets.pnl_holding) >= 0 ? '+' : '' }}{{ formatMoney(data.assets.pnl_holding) }}
+                </span>
               </div>
             </div>
-          </transition>
-        </article>
+          </div>
+          <div class="hero-chart">
+            <div class="chart-head">
+              <div>
+                <p class="kicker">资产曲线</p>
+                <p class="chart-meta">{{ chartEmpty ? '暂无图表数据' : `样本 ${chartPoints.length} 条 · 最新 ¥${formatMoney(latestAssetValue)}` }}</p>
+              </div>
+            </div>
+            <div ref="chartRef" class="chart-box"></div>
+          </div>
+        </div>
+      </section>
 
-        <article class="panel note-panel">
-          <div class="panel-head">
+      <!-- Main 2-col: trades + AI digest -->
+      <section class="pub-main">
+        <article class="surface panel">
+          <header class="panel-head">
             <div>
-              <h2>看板说明</h2>
-              <p>数据口径与使用提示</p>
+              <h2 class="t-title">成交播报</h2>
+              <p class="t-sub">最近交易动态</p>
             </div>
-            <button class="fold-btn" @click="toggleSection('notes')">
-              {{ isSectionOpen('notes') ? '收起' : '展开' }}
-            </button>
+            <span class="tag tag-neutral">{{ data.logs.length }} 条</span>
+          </header>
+          <div v-if="data.logs.length === 0" class="empty"><span class="empty-title">暂无成交</span></div>
+          <div v-else class="feed-list scroll-thin">
+            <article v-for="(log, idx) in data.logs" :key="idx" class="feed-item">
+              <div class="feed-top">
+                <span :class="['side-pill', log.side === 'BUY' ? 'side-buy' : 'side-sell']">
+                  {{ log.side === 'BUY' ? 'B' : 'S' }}
+                </span>
+                <span class="mono feed-time">{{ log.time || '--' }}</span>
+              </div>
+              <div class="feed-main">{{ log.text || '--' }}</div>
+              <div class="feed-sub mono">{{ log.detail || '' }}</div>
+            </article>
           </div>
-
-          <transition name="panel-fold">
-            <div v-show="isSectionOpen('notes')" class="note-list">
-              <article v-for="(item, idx) in publicHints" :key="idx" class="note-item">
-                <div class="note-top">
-                  <span class="note-dot" :class="`dot-${item.level}`"></span>
-                  <strong>{{ item.title }}</strong>
-                </div>
-                <p>{{ item.text }}</p>
-              </article>
-            </div>
-          </transition>
         </article>
-      </aside>
-    </section>
 
-    <section class="bottom-grid">
-      <article class="panel hold-panel fade-rise">
-        <div class="panel-head">
-          <div>
-            <h2>持仓结构</h2>
-            <p>按现价与浮动盈亏展示</p>
-          </div>
-          <span class="head-chip">{{ data.holdings.length }} 支</span>
-          <button class="fold-btn" @click="toggleSection('holdings')">
-            {{ isSectionOpen('holdings') ? '收起' : '展开' }}
-          </button>
-        </div>
-
-        <transition name="panel-fold">
-          <div v-show="isSectionOpen('holdings')">
-            <div v-if="data.holdings.length === 0" class="empty">暂无持仓</div>
-            <div v-else class="table-wrap scrollbar-thin">
-              <table class="hold-table">
-                <thead>
-                  <tr>
-                    <th>证券</th>
-                    <th>数量</th>
-                    <th>现价</th>
-                    <th>盈亏</th>
-                    <th>仓位</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  <tr v-for="h in data.holdings" :key="h.code">
-                    <td>
-                      <div class="cell-main">{{ h.name || '--' }}</div>
-                      <div class="cell-sub mono">{{ h.code || '--' }}</div>
-                    </td>
-                    <td class="mono">{{ formatQty(h.quantity) }}</td>
-                    <td class="mono">¥{{ formatMoney(h.price) }}</td>
-                    <td class="mono" :class="getColor(h.pnl_val)">¥{{ formatMoney(h.pnl_val) }}</td>
-                    <td class="mono">{{ formatWeight(h.position_rate) }}</td>
-                  </tr>
-                </tbody>
-              </table>
+        <article class="surface panel">
+          <header class="panel-head">
+            <div>
+              <h2 class="t-title">AI 自动交易</h2>
+              <p class="t-sub">最近一次 AI 委员会决策</p>
             </div>
-          </div>
-        </transition>
-      </article>
-
-      <article class="panel comment-panel fade-rise">
-        <div class="panel-head">
-          <div>
-            <h2>公开评论</h2>
-            <p>欢迎交流观点，理性发言</p>
-          </div>
-          <span class="head-chip">{{ comments.length }} 条</span>
-          <button class="fold-btn" @click="toggleSection('comments')">
-            {{ isSectionOpen('comments') ? '收起' : '展开' }}
-          </button>
-        </div>
-
-        <transition name="panel-fold">
-          <div v-show="isSectionOpen('comments')">
-            <form class="comment-form" @submit.prevent="submitComment">
-              <input v-model="commentForm.nickname" maxlength="20" class="comment-input" placeholder="昵称（可选）" />
-              <input v-model="commentForm.content" maxlength="500" class="comment-input" placeholder="输入评论内容" />
-              <button class="btn btn-primary comment-submit" :disabled="commentSubmitting">
-                {{ commentSubmitting ? '发布中...' : '发布' }}
-              </button>
-            </form>
-
-            <div class="comment-list scrollbar-thin">
-              <div v-if="comments.length === 0" class="empty">暂无评论</div>
-              <article v-for="item in comments" :key="item.id" class="comment-item">
-                <div class="comment-head">
-                  <strong>{{ item.nickname || '访客' }}</strong>
-                  <span class="mono">{{ item.created_at }}</span>
-                </div>
-                <p>{{ item.content }}</p>
-              </article>
+            <span :class="['tag', data.ai?.enabled ? 'tag-up' : 'tag-neutral']">
+              {{ data.ai?.enabled ? 'AUTO ON' : 'AUTO OFF' }}
+            </span>
+          </header>
+          <div v-if="!aiLatest" class="empty"><span class="empty-title">暂无 AI 运行记录</span></div>
+          <div v-else class="ai-content">
+            <div class="ai-meta">
+              <span :class="['tag', aiLatest.status === 'SUCCESS' ? 'tag-up' : aiLatest.status === 'SKIPPED' ? 'tag-warn' : 'tag-neutral']">{{ aiLatest.status || '--' }}</span>
+              <span class="mono text-faint">{{ aiLatest.created_at_cst || '--' }}</span>
             </div>
+            <div class="ai-stats">
+              <div><span>触发</span><strong>{{ aiLatest.trigger || '--' }}</strong></div>
+              <div><span>胜出</span><strong>{{ aiLatest.manager_winner || '--' }}</strong></div>
+              <div><span>执行</span><strong class="mono">{{ aiLatest.executed_total || 0 }} / {{ aiLatest.actions_total || 0 }}</strong></div>
+            </div>
+            <div v-if="aiLatest.skipped" class="ai-skip">
+              <strong>本次跳过：</strong>{{ aiLatest.reason || '未返回原因' }}
+            </div>
+            <div class="ai-brief">
+              <p><strong>长期：</strong>{{ aiHorizons.long_term || '--' }}</p>
+              <p><strong>中期：</strong>{{ aiHorizons.mid_term || '--' }}</p>
+              <p><strong>短期：</strong>{{ aiHorizons.short_term || '--' }}</p>
+              <p><strong>做T：</strong>{{ aiHorizons.intraday_t || '--' }}</p>
+            </div>
+            <ul v-if="aiNewsReferences.length > 0" class="ai-news">
+              <li v-for="(it, i) in aiNewsReferences" :key="`n${i}-${it.title}`">
+                <a :href="it.link" target="_blank" rel="noopener noreferrer" class="mono">{{ it.title }}</a>
+              </li>
+            </ul>
           </div>
-        </transition>
-      </article>
-    </section>
+        </article>
+      </section>
+
+      <!-- Holdings + Comments -->
+      <section class="pub-bottom">
+        <article class="surface panel">
+          <header class="panel-head">
+            <div>
+              <h2 class="t-title">持仓结构</h2>
+              <p class="t-sub">按现价估值与浮动盈亏</p>
+            </div>
+            <span class="tag tag-neutral">{{ data.holdings.length }} 支</span>
+          </header>
+          <div v-if="data.holdings.length === 0" class="empty"><span class="empty-title">暂无持仓</span></div>
+          <div v-else class="tbl-wrap scroll-thin">
+            <table class="tbl tbl-condensed">
+              <thead>
+                <tr>
+                  <th>证券</th>
+                  <th class="is-num">数量</th>
+                  <th class="is-num">现价</th>
+                  <th class="is-num">浮盈亏</th>
+                  <th class="is-num">仓位</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr v-for="h in data.holdings" :key="h.code">
+                  <td>
+                    <div class="cell-name">{{ h.name || '--' }}</div>
+                    <div class="cell-code mono">{{ h.code }}</div>
+                  </td>
+                  <td class="is-num mono">{{ formatQty(h.quantity) }}</td>
+                  <td class="is-num mono">¥{{ formatMoney(h.price) }}</td>
+                  <td class="is-num mono num-strong" :class="Number(h.pnl_val) >= 0 ? 'num-up' : 'num-down'">
+                    {{ Number(h.pnl_val) >= 0 ? '+' : '' }}¥{{ formatMoney(h.pnl_val) }}
+                  </td>
+                  <td class="is-num mono">{{ h.position_rate?.toFixed ? h.position_rate.toFixed(2) : h.position_rate }}%</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </article>
+
+        <article class="surface panel">
+          <header class="panel-head">
+            <div>
+              <h2 class="t-title">公开评论</h2>
+              <p class="t-sub">理性发言，共同交流</p>
+            </div>
+            <span class="tag tag-neutral">{{ comments.length }} 条</span>
+          </header>
+          <form class="comment-form" @submit.prevent="submitComment">
+            <input v-model="commentForm.nickname" maxlength="20" class="input" placeholder="昵称（可选）" />
+            <input v-model="commentForm.content" maxlength="500" class="input" placeholder="说点什么…" required />
+            <button class="btn btn-primary btn-sm" :disabled="commentSubmitting">
+              {{ commentSubmitting ? '发布中…' : '发布' }}
+            </button>
+          </form>
+          <div v-if="comments.length === 0" class="empty"><span class="empty-title">暂无评论</span></div>
+          <div v-else class="comment-list scroll-thin">
+            <article v-for="c in comments" :key="c.id" class="comment-item">
+              <div class="comment-head">
+                <strong>{{ c.nickname || '访客' }}</strong>
+                <span class="mono text-faint">{{ c.created_at }}</span>
+              </div>
+              <p>{{ c.content }}</p>
+            </article>
+          </div>
+        </article>
+      </section>
+    </div>
   </div>
 </template>
 
 <script setup lang="ts">
 import { computed, nextTick, onMounted, onUnmounted, reactive, ref } from 'vue';
-import type { EChartsType } from '../../utils/echartsLite';
 import api from '../../api';
-import { formatMoney, formatPct, formatQty, getColor, isTradingSession, shanghaiNowText } from '../../utils/format';
+import { formatMoney, formatPct, formatQty, isTradingSession, shanghaiNowText } from '../../utils/format';
 import { notifyError, notifySuccess } from '../../utils/notify';
 
 const chartRef = ref<HTMLElement | null>(null);
-let chartLib: typeof import('../../utils/echartsLite') | null = null;
-let chart: EChartsType | null = null;
+let chartLib: any = null;
+let chart: any = null;
 
 const data = reactive<any>({
-  assets: {
-    total: 0,
-    market_cap: 0,
-    balance: 0,
-    frozen: 0,
-    pnl_holding: 0,
-    day_pnl: 0,
-    day_pct: 0,
-    return_total_pct: 0
-  },
+  assets: { total: 0, market_cap: 0, balance: 0, frozen: 0, pnl_holding: 0, day_pnl: 0, day_pct: 0, return_total_pct: 0 },
   holdings: [],
   logs: [],
   charts: { asset: [], latest: null },
-  ai: {
-    enabled: false,
-    latest: null,
-    discussion_digest: null,
-    news_references: []
-  }
+  ai: { enabled: false, latest: null, discussion_digest: null, news_references: [] }
 });
 
 const comments = ref<any[]>([]);
+const commentForm = reactive({ nickname: '', content: '' });
 const commentSubmitting = ref(false);
-const commentForm = reactive({
-  nickname: '',
-  content: ''
-});
 
 const nowText = ref(shanghaiNowText());
 const syncing = ref(false);
 const lastSyncAt = ref<Date | null>(null);
-const isCompactMobile = ref(typeof window !== 'undefined' ? window.innerWidth <= 720 : false);
-type SectionKey = 'feed' | 'ai' | 'notes' | 'holdings' | 'comments';
-const collapsed = reactive<Record<SectionKey, boolean>>({
-  feed: false,
-  ai: false,
-  notes: true,
-  holdings: false,
-  comments: true
-});
 
-const marketOpen = computed(() => {
-  nowText.value;
-  return isTradingSession();
-});
+const marketOpen = computed(() => isTradingSession());
 
 const chartPoints = computed(() => {
   const points = Array.isArray(data.charts?.asset) ? [...data.charts.asset] : [];
   if (data.charts?.latest?.date) points.push(data.charts.latest);
   return points;
 });
-
-const publicHints = computed(() => {
-  return [
-    { title: '数据口径', text: '总资产 = 现金余额 + 持仓按当前价格估值。', level: 'info' },
-    { title: '更新频率', text: '公开页按固定周期刷新，实时性略低于管理端。', level: 'risk' },
-    { title: '免责声明', text: '本系统用于策略演示与流程验证，不构成投资建议。', level: 'ok' }
-  ] as Array<{ title: string; text: string; level: 'info' | 'risk' | 'ok' }>;
+const chartEmpty = computed(() => chartPoints.value.length === 0);
+const latestAssetValue = computed(() => {
+  const points = chartPoints.value;
+  const latest = points.length > 0 ? points[points.length - 1] : null;
+  return Number(latest?.value ?? data.assets.total ?? 0);
 });
 
-const chartEmpty = computed(() => chartPoints.value.length === 0);
 const aiLatest = computed(() => data.ai?.latest || null);
 const aiDiscussion = computed(() => {
-  const digest = data.ai?.discussion_digest;
-  return digest && typeof digest === 'object' ? digest : {};
+  const d = data.ai?.discussion_digest;
+  return d && typeof d === 'object' ? d : {};
 });
 const aiHorizons = computed(() => {
   const h = aiDiscussion.value?.president?.strategy_horizons;
@@ -350,45 +264,13 @@ const aiHorizons = computed(() => {
 });
 const aiNewsReferences = computed(() => {
   const refs = data.ai?.news_references;
-  return Array.isArray(refs) ? refs.slice(0, 3) : [];
-});
-const aiSkipReasons = computed(() => {
-  const blocked = Array.isArray(aiLatest.value?.blocked_reasons)
-    ? aiLatest.value.blocked_reasons.map((x: any) => String(x || '').trim()).filter(Boolean)
-    : [];
-  const nonBlocking = Array.isArray(aiLatest.value?.non_blocking_reasons)
-    ? aiLatest.value.non_blocking_reasons.map((x: any) => String(x || '').trim()).filter(Boolean)
-    : [];
-  return [...blocked, ...nonBlocking].slice(0, 3);
-});
-const latestAssetValue = computed(() => {
-  const points = chartPoints.value;
-  const latest = points.length > 0 ? points[points.length - 1] : null;
-  return Number(latest?.value ?? data.assets.total ?? 0);
+  return Array.isArray(refs) ? refs.slice(0, 4) : [];
 });
 
 const lastSyncText = computed(() => {
-  if (!lastSyncAt.value) return '--:--:--';
+  if (!lastSyncAt.value) return '--:--';
   return lastSyncAt.value.toLocaleTimeString('zh-CN', { hour12: false });
 });
-
-const formatWeight = (val: number | string | undefined | null) => {
-  const num = Number(val ?? 0);
-  if (!Number.isFinite(num)) return '0.00%';
-  return `${num.toFixed(2)}%`;
-};
-
-const isSectionOpen = (key: SectionKey) => !isCompactMobile.value || !collapsed[key];
-
-const toggleSection = (key: SectionKey) => {
-  if (!isCompactMobile.value) return;
-  collapsed[key] = !collapsed[key];
-};
-
-const syncCompactMode = () => {
-  if (typeof window === 'undefined') return;
-  isCompactMobile.value = window.innerWidth <= 720;
-};
 
 const ensureChartLib = async () => {
   if (chartLib) return chartLib;
@@ -403,29 +285,33 @@ const renderChart = async () => {
   const points = chartPoints.value;
 
   chart.setOption({
-    animationDuration: 260,
-    grid: { top: 16, left: 48, right: 16, bottom: 24 },
+    animationDuration: 320,
+    grid: { top: 8, left: 56, right: 12, bottom: 24 },
     xAxis: {
       type: 'category',
       data: points.map((x: any) => x.date),
       boundaryGap: false,
-      axisLabel: { color: '#6b7280', fontSize: 11 },
-      axisLine: { lineStyle: { color: '#e5e7eb' } }
+      axisLabel: { color: '#7a8089', fontSize: 10 },
+      axisLine: { lineStyle: { color: '#e6e8ec' } },
+      axisTick: { show: false }
     },
     yAxis: {
       type: 'value',
       axisLabel: {
-        color: '#6b7280',
-        formatter: (v: number) => `¥${Math.round(v).toLocaleString('zh-CN')}`
+        color: '#7a8089',
+        fontSize: 10,
+        formatter: (v: number) => `${(v / 10000).toFixed(0)}万`
       },
-      splitLine: { lineStyle: { color: '#f1f5f9' } }
+      splitLine: { lineStyle: { color: '#eef0f3' } }
     },
     tooltip: {
       trigger: 'axis',
       backgroundColor: '#ffffff',
-      borderColor: '#dbe1ea',
+      borderColor: '#e6e8ec',
       borderWidth: 1,
-      textStyle: { color: '#111827' }
+      padding: [8, 10],
+      textStyle: { color: '#0f1115', fontSize: 12 },
+      valueFormatter: (v: any) => `¥${Number(v).toLocaleString('zh-CN')}`
     },
     series: [
       {
@@ -433,11 +319,11 @@ const renderChart = async () => {
         smooth: 0.3,
         data: points.map((x: any) => x.value),
         symbol: 'none',
-        lineStyle: { width: 2.2, color: '#10a37f' },
+        lineStyle: { width: 2, color: '#10a37f' },
         areaStyle: {
           color: new echartsLite.graphic.LinearGradient(0, 0, 0, 1, [
-            { offset: 0, color: 'rgba(16, 163, 127, 0.22)' },
-            { offset: 1, color: 'rgba(16, 163, 127, 0.02)' }
+            { offset: 0, color: 'rgba(16, 163, 127, 0.18)' },
+            { offset: 1, color: 'rgba(16, 163, 127, 0.0)' }
           ])
         }
       }
@@ -453,715 +339,158 @@ const loadOverview = async (silent = false) => {
     await nextTick();
     await renderChart();
     lastSyncAt.value = new Date();
-  } catch (error) {
-    if (!silent) notifyError('公开看板加载失败', '请稍后重试。');
-    throw error;
+  } catch {
+    if (!silent) notifyError('公开看板加载失败');
+    throw null;
   } finally {
     if (!silent) syncing.value = false;
   }
 };
-
-const refreshOverview = async () => {
-  try {
-    await loadOverview(false);
-  } catch {
-    // notice is already handled in loadOverview
-  }
-};
-
-const loadComments = async () => {
-  comments.value = await api.getComments();
-};
+const refreshOverview = async () => { try { await loadOverview(false); } catch { /* ignore */ } };
+const loadComments = async () => { comments.value = await api.getComments(); };
 
 const submitComment = async () => {
-  const nickname = commentForm.nickname.trim();
   const content = commentForm.content.trim();
-
-  if (!content) {
-    notifyError('评论内容为空', '请输入评论内容后再提交。');
-    return;
-  }
-
+  if (!content) { notifyError('评论为空', '请输入评论内容'); return; }
   commentSubmitting.value = true;
   try {
-    await api.comment({ nickname, content });
+    await api.comment({ nickname: commentForm.nickname.trim(), content });
     commentForm.content = '';
     await loadComments();
-    notifySuccess('评论发布成功', '你的留言已进入公开评论区。');
-  } finally {
-    commentSubmitting.value = false;
-  }
+    notifySuccess('评论发布成功');
+  } finally { commentSubmitting.value = false; }
 };
 
-let refreshTimer: ReturnType<typeof setInterval> | null = null;
-let clockTimer: ReturnType<typeof setInterval> | null = null;
-const onResize = () => {
-  syncCompactMode();
-  chart?.resize();
-};
+let refreshTimer: any = null;
+let clockTimer: any = null;
+
+const onResize = () => { try { chart?.resize(); } catch { /* ignore */ } };
 
 onMounted(async () => {
-  syncCompactMode();
-  try {
-    await Promise.all([loadOverview(false), loadComments()]);
-  } catch {
-    // load failure notice already shown by interceptors/loadOverview
-  }
-
-  refreshTimer = setInterval(async () => {
-    try {
-      await loadOverview(true);
-    } catch {
-      // ignored in polling
-    }
-  }, 15000);
-
-  clockTimer = setInterval(() => {
-    nowText.value = shanghaiNowText();
-  }, 1000);
-
+  try { await Promise.all([loadOverview(false), loadComments()]); } catch { /* ignore */ }
+  refreshTimer = setInterval(async () => { try { await loadOverview(true); } catch { /* ignore */ } }, 15000);
+  clockTimer = setInterval(() => { nowText.value = shanghaiNowText(); }, 1000);
   window.addEventListener('resize', onResize);
 });
-
 onUnmounted(() => {
   if (refreshTimer) clearInterval(refreshTimer);
   if (clockTimer) clearInterval(clockTimer);
   window.removeEventListener('resize', onResize);
-  chart?.dispose();
+  try { chart?.dispose(); } catch { /* ignore */ }
   chart = null;
 });
 </script>
 
 <style scoped>
-.oa-shell {
-  min-height: 100vh;
-  width: min(1560px, 100%);
-  margin: 0 auto;
-  padding: 12px;
-  display: grid;
+.pub-shell { min-height: 100vh; background: var(--bg); }
+.pub-topbar {
+  height: var(--topbar-h);
+  background: var(--bg-elev);
+  border-bottom: 1px solid var(--line);
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 0 18px;
   gap: 12px;
-  color: #111827;
-  background:
-    radial-gradient(980px 340px at 10% -20%, rgba(16, 163, 127, 0.09), transparent 66%),
-    radial-gradient(800px 280px at 110% 120%, rgba(15, 23, 42, 0.04), transparent 70%),
-    #f8fafc;
-}
-
-.oa-topbar,
-.panel,
-.stat-card {
-  border: 1px solid #e5eaf0;
-  border-radius: 14px;
-  background: #ffffff;
-  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04), 0 10px 30px rgba(15, 23, 42, 0.05);
-}
-
-.oa-topbar {
-  padding: 14px;
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto auto;
-  gap: 10px;
-  align-items: center;
-}
-
-.brand-kicker {
-  margin: 0;
-  font-size: 10px;
-  letter-spacing: 0.18em;
-  text-transform: uppercase;
-  color: #6b7280;
-}
-
-.brand-block h1 {
-  margin: 6px 0 0;
-  font-size: clamp(20px, 2.6vw, 28px);
-  line-height: 1.15;
-  font-weight: 800;
-  color: #0f172a;
-}
-
-.brand-sub {
-  margin: 8px 0 0;
-  font-size: 12px;
-  color: #64748b;
-}
-
-.meta-block {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: flex-end;
-  gap: 6px;
-  font-size: 12px;
-  color: #6b7280;
-}
-
-.state-chip,
-.head-chip {
-  display: inline-flex;
-  align-items: center;
-  border-radius: 999px;
-  padding: 4px 10px;
-  font-size: 11px;
-  font-weight: 700;
-}
-
-.state-chip.live {
-  color: #0f766e;
-  border: 1px solid #99f6e4;
-  background: #ecfeff;
-}
-
-.state-chip.closed {
-  color: #475569;
-  border: 1px solid #dbe2ea;
-  background: #f8fafc;
-}
-
-.sync-text {
-  color: #94a3b8;
-}
-
-.action-block {
-  display: flex;
-  gap: 8px;
-}
-
-.btn {
-  border-radius: 10px;
-  border: 1px solid #d7e0ea;
-  background: #ffffff;
-  color: #1e293b;
-  font-size: 12px;
-  font-weight: 700;
-  padding: 8px 12px;
-  transition: all 0.2s ease;
-}
-
-.btn:hover {
-  background: #f8fafc;
-  border-color: #c9d5e4;
-}
-
-.btn:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
-}
-
-.btn-primary {
-  color: #ffffff;
-  border-color: #0f8f6f;
-  background: linear-gradient(180deg, #16b58d 0%, #10a37f 100%);
-}
-
-.btn-primary:hover {
-  filter: brightness(1.03);
-}
-
-.stats-grid {
-  display: grid;
-  gap: 10px;
-  grid-template-columns: repeat(6, minmax(0, 1fr));
-}
-
-.stat-card {
-  padding: 11px 12px;
-  display: grid;
-  gap: 6px;
-}
-
-.stat-label {
-  font-size: 11px;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-  color: #64748b;
-}
-
-.stat-value {
-  font-size: 16px;
-  font-weight: 800;
-  color: #0f172a;
-}
-
-.up {
-  color: #d92d20;
-}
-
-.down {
-  color: #067647;
-}
-
-.main-grid {
-  display: grid;
-  gap: 12px;
-  grid-template-columns: minmax(0, 1.35fr) minmax(320px, 0.9fr);
-  align-items: start;
-}
-
-.side-grid {
-  display: grid;
-  gap: 12px;
-}
-
-.panel {
-  padding: 12px;
-}
-
-.panel-head {
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
-  gap: 8px;
-  margin-bottom: 10px;
-}
-
-.fold-btn {
-  margin-left: auto;
-  border: 1px solid #d7e0ea;
-  background: #fff;
-  color: #475569;
-  border-radius: 999px;
-  padding: 2px 8px;
-  font-size: 10px;
-  font-weight: 700;
-  display: none;
-}
-
-.panel-head h2 {
-  margin: 0;
-  font-size: 13px;
-  font-weight: 800;
-  color: #0f172a;
-}
-
-.panel-head p {
-  margin: 4px 0 0;
-  font-size: 12px;
-  color: #64748b;
-}
-
-.head-chip {
-  color: #0f766e;
-  border: 1px solid #a7f3d0;
-  background: #f0fdf4;
-}
-
-.chart-box {
-  height: clamp(260px, 36vh, 380px);
-}
-
-.feed-list {
-  max-height: 340px;
-  overflow-y: auto;
-  display: grid;
-  gap: 8px;
-}
-
-.feed-item {
-  border: 1px solid #e6ecf3;
-  border-radius: 10px;
-  background: #fbfdff;
-  padding: 9px;
-}
-
-.feed-top {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 6px;
-  font-size: 12px;
-}
-
-.side-pill {
-  border-radius: 999px;
-  padding: 2px 8px;
-  font-size: 10px;
-  font-weight: 800;
-}
-
-.pill-buy {
-  color: #b42318;
-  background: #fee4e2;
-}
-
-.pill-sell {
-  color: #067647;
-  background: #dafbe9;
-}
-
-.feed-main {
-  font-size: 12px;
-  font-weight: 600;
-  color: #0f172a;
-  overflow-wrap: anywhere;
-}
-
-.feed-sub {
-  margin-top: 4px;
-  font-size: 11px;
-  color: #64748b;
-  overflow-wrap: anywhere;
-}
-
-.note-list {
-  display: grid;
-  gap: 8px;
-}
-
-.note-item {
-  border: 1px solid #e6ecf3;
-  border-radius: 10px;
-  background: #fcfdff;
-  padding: 9px 10px;
-}
-
-.note-top {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.note-dot {
-  width: 7px;
-  height: 7px;
-  border-radius: 999px;
-}
-
-.dot-info {
-  background: #0ea5e9;
-}
-
-.dot-risk {
-  background: #f59e0b;
-}
-
-.dot-ok {
-  background: #10a37f;
-}
-
-.note-item strong {
-  font-size: 12px;
-  color: #0f172a;
-}
-
-.note-item p {
-  margin: 6px 0 0;
-  font-size: 11px;
-  line-height: 1.55;
-  color: #64748b;
-  overflow-wrap: anywhere;
-}
-
-.ai-panel {
-  background:
-    radial-gradient(760px 180px at 0% 0%, rgba(16, 163, 127, 0.1), transparent 62%),
-    #fff;
-}
-
-.chip-ai-on {
-  color: #065f46;
-  border-color: #86efac;
-  background: #f0fdf4;
-}
-
-.chip-ai-off {
-  color: #475569;
-  border-color: #dbe2ea;
-  background: #f8fafc;
-}
-
-.ai-content {
-  display: grid;
-  gap: 8px;
-}
-
-.ai-topline {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 6px;
-  font-size: 11px;
-}
-
-.ai-metrics {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-}
-
-.ai-metrics span {
-  border: 1px solid #e6ecf3;
-  border-radius: 999px;
-  padding: 2px 8px;
-  font-size: 10px;
-  color: #475569;
-  background: #f8fafc;
-}
-
-.ai-skip-box {
-  border: 1px solid #f9d58b;
-  border-radius: 10px;
-  background:
-    radial-gradient(680px 140px at 0% 0%, rgba(245, 158, 11, 0.16), transparent 62%),
-    #fffaf0;
-  padding: 8px 9px;
-  display: grid;
-  gap: 4px;
-}
-
-.ai-skip-box p {
-  margin: 0;
-  font-size: 11px;
-  color: #78350f;
-  line-height: 1.45;
-}
-
-.ai-skip-list {
-  margin: 2px 0 0;
-  padding-left: 16px;
-  display: grid;
-  gap: 4px;
-  font-size: 11px;
-  color: #92400e;
-}
-
-.ai-brief {
-  border: 1px solid #e6ecf3;
-  border-radius: 10px;
-  background: #fbfdff;
-  padding: 8px 9px;
-  display: grid;
-  gap: 3px;
-}
-
-.ai-brief p {
-  margin: 0;
-  font-size: 11px;
-  color: #334155;
-  line-height: 1.45;
-  overflow-wrap: anywhere;
-}
-
-.ai-news {
-  margin: 0;
-  padding: 0;
-  list-style: none;
-  display: grid;
-  gap: 5px;
-}
-
-.ai-news li {
-  border: 1px solid #e6ecf3;
-  border-radius: 8px;
-  background: #fff;
-  padding: 6px 8px;
-}
-
-.ai-news a {
-  color: #1453c2;
-  text-decoration: none;
-  font-size: 11px;
-  overflow-wrap: anywhere;
-}
-
-.ai-news a:hover {
-  text-decoration: underline;
-}
-
-.panel-fold-enter-active,
-.panel-fold-leave-active {
-  transition: all 0.2s ease;
-  overflow: hidden;
-}
-
-.panel-fold-enter-from,
-.panel-fold-leave-to {
-  opacity: 0;
-  transform: translateY(-4px);
-  max-height: 0;
-}
-
-.panel-fold-enter-to,
-.panel-fold-leave-from {
-  opacity: 1;
-  transform: translateY(0);
-  max-height: 1200px;
-}
-
-.bottom-grid {
-  display: grid;
-  gap: 12px;
-  grid-template-columns: minmax(0, 1.3fr) minmax(0, 0.9fr);
-  align-items: start;
-}
-
-.table-wrap {
-  overflow-x: auto;
-}
-
-.hold-table {
-  width: 100%;
-  border-collapse: collapse;
-}
-
-.hold-table th,
-.hold-table td {
-  padding: 10px 8px;
-  border-top: 1px solid #e6ecf3;
-  font-size: 12px;
-  text-align: left;
-}
-
-.hold-table th {
-  color: #64748b;
-  font-size: 11px;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-}
-
-.cell-main {
-  color: #0f172a;
-  font-weight: 700;
-}
-
-.cell-sub {
-  margin-top: 2px;
-  color: #64748b;
-  font-size: 11px;
-}
-
-.comment-form {
-  display: grid;
-  gap: 8px;
-  grid-template-columns: minmax(120px, 180px) minmax(0, 1fr) auto;
-}
-
-.comment-input {
-  width: 100%;
-  border: 1px solid #d7e0ea;
-  border-radius: 10px;
-  padding: 10px 11px;
-  font-size: 12px;
-  background: #ffffff;
-  color: #0f172a;
-  outline: none;
-}
-
-.comment-input::placeholder {
-  color: #94a3b8;
-}
-
-.comment-input:focus {
-  border-color: #10a37f;
-  box-shadow: 0 0 0 2px rgba(16, 163, 127, 0.12);
-}
-
-.comment-submit {
-  min-width: 84px;
-}
-
-.comment-list {
-  margin-top: 10px;
-  max-height: 320px;
-  overflow-y: auto;
-  display: grid;
-  gap: 8px;
-}
-
-.comment-item {
-  border: 1px solid #e6ecf3;
-  border-radius: 10px;
-  background: #fbfdff;
-  padding: 9px 10px;
-}
-
-.comment-head {
-  display: flex;
-  justify-content: space-between;
-  gap: 8px;
-  font-size: 12px;
-}
-
-.comment-head strong {
-  color: #0f172a;
-}
-
-.comment-head span {
-  color: #64748b;
-}
-
-.comment-item p {
-  margin: 6px 0 0;
-  font-size: 12px;
-  line-height: 1.55;
-  color: #475569;
-  word-break: break-word;
-}
-
-.mono {
-  font-family: 'JetBrains Mono', monospace;
-}
-
-.empty {
-  padding: 18px 8px;
-  text-align: center;
-  font-size: 12px;
-  color: #94a3b8;
-}
-
-@media (max-width: 1180px) {
-  .oa-topbar {
-    grid-template-columns: 1fr;
-  }
-
-  .meta-block {
-    justify-content: flex-start;
-  }
-
-  .stats-grid {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-  }
-
-  .main-grid,
-  .bottom-grid {
-    grid-template-columns: 1fr;
-  }
-}
-
-@media (max-width: 720px) {
-  .oa-shell {
-    padding: 8px;
-    gap: 10px;
-  }
-
-  .brand-block h1 {
-    font-size: 20px;
-  }
-
-  .action-block {
-    flex-wrap: wrap;
-  }
-
-  .stats-grid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-
-  .comment-form {
-    grid-template-columns: 1fr;
-  }
-
-  .comment-submit {
-    width: 100%;
-  }
-
-  .ai-brief p,
-  .ai-news a {
-    font-size: 10px;
-  }
-
-  .fold-btn {
-    display: inline-flex;
-    align-items: center;
-  }
-}
+  position: sticky; top: 0; z-index: 30;
+}
+.pub-brand { display: flex; align-items: center; gap: 10px; }
+.pub-brand svg {
+  background: var(--text); color: #fff; padding: 4px; border-radius: var(--r-sm);
+}
+.pub-brand-text { display: flex; flex-direction: column; }
+.pub-brand-name { font-size: 14px; font-weight: 800; color: var(--text-strong); letter-spacing: -0.01em; }
+.pub-brand-sub { font-size: 10.5px; color: var(--text-muted); }
+.pub-meta { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.pub-clock { font-size: 12px; color: var(--text-soft); }
+.pub-sync { font-size: 11px; }
+.status-pill {
+  display: inline-flex; align-items: center; gap: 5px;
+  height: 22px; padding: 0 8px; border-radius: 999px;
+  font-size: 11px; font-weight: 700;
+  background: var(--bg-inset); color: var(--text-soft);
+  border: 1px solid var(--line-soft);
+}
+.status-pill .status-dot { width: 6px; height: 6px; border-radius: 999px; background: currentColor; }
+.status-pill.open { background: var(--up-soft); color: var(--up); border-color: var(--up-line); }
+.status-pill.closed { background: var(--bg-inset); color: var(--text-muted); }
+
+.pub-page { max-width: 1280px; margin: 0 auto; padding: 18px; display: flex; flex-direction: column; gap: 16px; }
+
+/* Hero */
+.pub-hero { padding: 20px 24px; }
+.hero-grid { display: grid; grid-template-columns: 1.2fr 1fr; gap: 24px; align-items: stretch; }
+.kicker { font-size: 10.5px; font-weight: 700; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.12em; }
+.hero-main { display: flex; flex-direction: column; gap: 12px; }
+.hero-amount {
+  display: inline-flex; align-items: baseline; gap: 4px;
+  font-size: 44px; font-weight: 800; letter-spacing: -0.02em; color: var(--text-strong);
+  font-variant-numeric: tabular-nums;
+}
+.amount-symbol { font-size: 22px; color: var(--text-muted); }
+.hero-stats { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px 16px; }
+.hero-stat { display: flex; flex-direction: column; gap: 2px; padding: 8px 0; border-top: 1px solid var(--line-soft); }
+.hs-label { font-size: 11px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.04em; font-weight: 600; }
+.hs-value { font-size: 16px; font-weight: 700; color: var(--text-strong); display: inline-flex; gap: 6px; align-items: baseline; }
+.hs-value em { font-style: normal; font-size: 11.5px; color: var(--text-muted); }
+
+.hero-chart { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+.chart-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 10px; }
+.chart-meta { font-size: 12px; color: var(--text-muted); margin-top: 2px; }
+.chart-box { height: clamp(220px, 32vh, 320px); }
+
+@media (max-width: 920px) {
+  .hero-grid { grid-template-columns: 1fr; }
+  .hero-stats { grid-template-columns: 1fr 1fr; }
+}
+
+/* Main 2-col */
+.pub-main, .pub-bottom { display: grid; grid-template-columns: 1.3fr 1fr; gap: 14px; }
+@media (max-width: 920px) { .pub-main, .pub-bottom { grid-template-columns: 1fr; } }
+
+.panel { padding: 0; }
+.panel-head { padding: 12px 16px; border-bottom: 1px solid var(--line); display: flex; justify-content: space-between; align-items: center; }
+.t-title { font-size: 13.5px; font-weight: 700; color: var(--text-strong); }
+.t-sub { font-size: 11.5px; color: var(--text-muted); margin-top: 2px; }
+
+.feed-list { display: flex; flex-direction: column; gap: 6px; padding: 10px 14px; max-height: 60vh; overflow: auto; }
+.feed-item { padding: 8px 10px; border: 1px solid var(--line-soft); border-radius: var(--r-sm); background: var(--bg-subtle); display: flex; flex-direction: column; gap: 4px; }
+.feed-top { display: flex; justify-content: space-between; align-items: center; font-size: 11px; }
+.feed-time { color: var(--text-muted); }
+.feed-main { font-size: 12.5px; font-weight: 600; color: var(--text-strong); }
+.feed-sub { font-size: 11px; color: var(--text-muted); }
+
+.side-pill { display: inline-flex; align-items: center; justify-content: center; width: 22px; height: 22px; border-radius: 4px; font-size: 11px; font-weight: 800; }
+.side-pill.side-buy { background: var(--up-soft); color: var(--up); }
+.side-pill.side-sell { background: var(--down-soft); color: var(--down); }
+
+/* AI panel */
+.ai-content { padding: 12px 14px; display: flex; flex-direction: column; gap: 10px; }
+.ai-meta { display: flex; justify-content: space-between; align-items: center; font-size: 11px; }
+.ai-stats { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; }
+.ai-stats > div { padding: 6px 8px; background: var(--bg-subtle); border: 1px solid var(--line-soft); border-radius: var(--r-sm); display: flex; flex-direction: column; gap: 2px; }
+.ai-stats span { font-size: 10.5px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.04em; }
+.ai-stats strong { font-size: 12px; color: var(--text-strong); }
+.ai-skip { padding: 8px 10px; background: var(--warn-soft); border: 1px solid var(--warn-line); border-radius: var(--r-sm); font-size: 12px; color: var(--text-strong); }
+.ai-brief { display: flex; flex-direction: column; gap: 4px; padding: 8px 10px; background: var(--bg-subtle); border: 1px solid var(--line-soft); border-radius: var(--r-sm); }
+.ai-brief p { font-size: 11.5px; color: var(--text-soft); line-height: 1.5; }
+.ai-brief strong { color: var(--text); font-weight: 700; }
+.ai-news { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
+.ai-news li { padding: 5px 8px; border: 1px solid var(--line-soft); border-radius: var(--r-xs); background: var(--bg-elev); }
+.ai-news a { font-size: 11.5px; color: var(--info); word-break: break-word; }
+.ai-news a:hover { text-decoration: underline; }
+
+/* Holdings + Comments */
+.tbl-wrap { overflow: auto; max-height: 50vh; }
+.cell-name { font-size: 13px; font-weight: 600; color: var(--text-strong); }
+.cell-code { font-size: 11px; color: var(--text-muted); }
+
+.comment-form { display: grid; grid-template-columns: minmax(120px, 180px) minmax(0, 1fr) auto; gap: 6px; padding: 12px 14px; border-bottom: 1px solid var(--line); }
+@media (max-width: 720px) { .comment-form { grid-template-columns: 1fr; } }
+.comment-list { display: flex; flex-direction: column; gap: 6px; padding: 10px 14px; max-height: 50vh; overflow: auto; }
+.comment-item { padding: 8px 10px; border: 1px solid var(--line-soft); border-radius: var(--r-sm); background: var(--bg-subtle); }
+.comment-head { display: flex; justify-content: space-between; align-items: center; font-size: 12px; }
+.comment-head strong { color: var(--text-strong); }
+.comment-item p { margin-top: 4px; font-size: 12.5px; color: var(--text-soft); line-height: 1.5; word-break: break-word; }
+
+.empty { padding: 40px 20px; text-align: center; color: var(--text-muted); display: flex; flex-direction: column; gap: 4px; align-items: center; }
+.empty-title { font-size: 12.5px; font-weight: 600; color: var(--text-soft); }
 </style>
