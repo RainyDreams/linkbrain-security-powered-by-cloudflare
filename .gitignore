@@ -6,3 +6,17 @@
 /.wrangler/
 /dist/
 **/dist/
+
+# Test screenshots & admin screenshots (local only)
+/t*.png
+/admin-*.png
+
+# Throwaway migration / fix scripts (local only)
+/tmp_*.js
+/tmp_*.sql
+
+# Local dev secrets (real values in wrangler secret put)
+/.dev.vars
+
+# Playwright MCP ephemeral cache
+/.playwright-mcp/
