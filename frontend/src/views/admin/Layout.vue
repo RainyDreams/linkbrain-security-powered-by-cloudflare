@@ -525,12 +525,15 @@ onUnmounted(() => {
   .admin-sidenav nav {
     flex-direction: row;
     overflow-x: auto;
+    overflow-y: hidden;
     gap: 4px;
     -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
   }
+  .admin-sidenav nav::-webkit-scrollbar { display: none; }
   .admin-sidenav .sidenav-foot { display: none; }
   .admin-metrics { margin-right: 4px; }
-  .admin-metric { padding: 4px 8px; }
+  .admin-metric { padding: 4px 8px; min-width: 0; }
   .admin-metric-label { font-size: 9px; }
   .admin-metric-value { font-size: 12px; }
   .topbar-brand-sub { display: none; }
@@ -543,15 +546,27 @@ onUnmounted(() => {
     flex-wrap: wrap;
     height: auto;
     padding: 8px 10px;
-    gap: 8px;
+    gap: 6px;
   }
+  .topbar-left { width: 100%; min-width: 0; gap: 8px; }
+  .topbar-right { width: 100%; min-width: 0; gap: 6px; }
   .admin-metrics {
-    order: 3;
-    width: 100%;
+    flex: 1;
     margin-right: 0;
+    overflow-x: auto;
+    overflow-y: hidden;
+    scrollbar-width: none;
   }
-  .admin-metric { flex: 1; }
-  .topbar-right { flex: 1; justify-content: flex-end; }
-  .topbar-brand-name { font-size: 13px; }
+  .admin-metrics::-webkit-scrollbar { display: none; }
+  .admin-metric { flex: 0 0 auto; min-width: 70px; padding: 4px 6px; }
+  .admin-metric-label { font-size: 9px; }
+  .admin-metric-value { font-size: 11px; }
+  .topbar-right { flex-wrap: nowrap; }
+  .topbar-brand-name { font-size: 13px; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .topbar-brand svg { width: 18px !important; height: 18px !important; }
+  .topbar-meta { gap: 6px; min-width: 0; flex: 1; }
+  .topbar-meta .status-pill { font-size: 10px; padding: 0 7px; }
+  .topbar-meta .clock-text { display: none; }
+  .user-avatar { width: 28px; height: 28px; font-size: 11px; }
 }
 </style>

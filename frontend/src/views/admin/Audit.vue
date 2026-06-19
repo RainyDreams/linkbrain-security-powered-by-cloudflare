@@ -457,11 +457,12 @@ onMounted(() => { void refreshAll(); });
 .audit-page { display: flex; flex-direction: column; gap: 14px; max-width: 1440px; }
 
 .health-card, .query-card, .result-card { padding: 0; }
-.card-head { padding: 14px 18px; border-bottom: 1px solid var(--line); display: flex; justify-content: space-between; align-items: center; gap: 10px; }
+.card-head { padding: 14px 18px; border-bottom: 1px solid var(--line); display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap; }
 .card-head.compact { padding: 10px 18px; }
 .t-title { font-size: 14px; font-weight: 700; color: var(--text-strong); }
 .t-sub { font-size: 12px; color: var(--text-muted); margin-top: 2px; }
 .head-actions { display: flex; gap: 6px; flex-wrap: wrap; }
+.head-actions .btn { min-width: 0; }
 
 .health-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px 16px; padding: 12px 18px; border-top: 1px solid var(--line-soft); }
 .health-cell { display: flex; flex-direction: column; gap: 3px; }
@@ -485,7 +486,21 @@ onMounted(() => { void refreshAll(); });
 
 .filter-grid { padding: 10px 18px 14px; display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 6px; border-top: 1px solid var(--line-soft); }
 @media (max-width: 1100px) { .filter-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
-@media (max-width: 720px) { .filter-grid { grid-template-columns: 1fr 1fr; } }
+@media (max-width: 720px) {
+  .filter-grid { grid-template-columns: 1fr 1fr; padding: 10px 12px; }
+  .preset-row { padding: 8px 12px; }
+  .tabs { width: 100%; overflow-x: auto; }
+  .tabs .tab { padding: 0 12px; font-size: 12px; }
+  .card-head { padding: 10px 12px; gap: 8px; }
+  .health-grid { padding: 10px 12px; gap: 8px 10px; }
+  .health-findings { padding: 8px 12px 12px; }
+  .tbl thead th { padding: 6px 8px; font-size: 10px; }
+  .tbl tbody td { padding: 8px; font-size: 11.5px; }
+}
+@media (max-width: 480px) {
+  .head-actions .btn { padding: 0 8px; height: 28px; font-size: 11px; flex: 1 1 calc(50% - 3px); justify-content: center; }
+  .head-actions .btn span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+}
 
 .tbl-wrap { overflow: auto; max-height: 65vh; }
 .tbl tbody tr { transition: background 0.1s ease; }

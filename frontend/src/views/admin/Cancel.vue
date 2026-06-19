@@ -230,12 +230,22 @@ onMounted(refresh);
 }
 .filter-btn.is-active .filter-count { background: rgba(255,255,255,0.18); color: #fff; }
 
-.tbl-wrap { overflow: auto; max-height: 70vh; }
+.tbl-wrap { overflow: auto; max-height: 70vh; -webkit-overflow-scrolling: touch; }
+.tbl { min-width: 720px; }
 
 .cell-name { font-size: 13px; font-weight: 600; color: var(--text-strong); }
 .cell-code { font-size: 11px; color: var(--text-muted); }
 .cell-tag { font-size: 10.5px; color: var(--text-soft); font-weight: 600; }
 .cell-remark { font-size: 11.5px; color: var(--text-muted); max-width: 240px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+@media (max-width: 480px) {
+  .head-grid { gap: 6px 12px !important; }
+  .metric .m-label { font-size: 10px !important; }
+  .metric .m-value { font-size: 14px !important; }
+  .head-actions .btn { flex: 1 1 calc(50% - 3px); padding: 0 8px; height: 28px; font-size: 11px; }
+  .filter-btn { padding: 0 8px; font-size: 11px; height: 26px; }
+  .filter-btn .filter-count { font-size: 10px; padding: 0 4px; }
+}
 
 .side-pill { display: inline-flex; align-items: center; justify-content: center; width: 22px; height: 22px; border-radius: 4px; font-size: 11px; font-weight: 800; }
 .side-pill.side-buy { background: var(--up-soft); color: var(--up); }

@@ -332,14 +332,25 @@ const renderChart = async () => {
   const points = chartPoints.value;
   const lineColor = chartLineColor.value;
 
+  const isNarrow = typeof window !== 'undefined' && window.innerWidth < 600;
   chart.setOption({
     animationDuration: 320,
-    grid: { top: 8, left: 56, right: 12, bottom: 24 },
+    grid: { top: 8, left: isNarrow ? 44 : 56, right: isNarrow ? 8 : 12, bottom: isNarrow ? 18 : 24, containLabel: false },
     xAxis: {
       type: 'category',
       data: points.map((x: any) => x.date),
       boundaryGap: false,
-      axisLabel: { color: '#7a8089', fontSize: 10 },
+      axisLabel: {
+        color: '#7a8089',
+        fontSize: isNarrow ? 9 : 10,
+        interval: isNarrow ? 'auto' : 'auto',
+        formatter: (v: string) => {
+          if (!v) return '';
+          if (isNarrow) return v.slice(5); // MM-DD only
+          return v;
+        },
+        hideOverlap: true
+      },
       axisLine: { lineStyle: { color: '#e6e8ec' } },
       axisTick: { show: false }
     },
@@ -347,8 +358,9 @@ const renderChart = async () => {
       type: 'value',
       axisLabel: {
         color: '#7a8089',
-        fontSize: 10,
-        formatter: (v: number) => `${(v / 10000).toFixed(0)}万`
+        fontSize: isNarrow ? 9 : 10,
+        formatter: (v: number) => `${(v / 10000).toFixed(0)}万`,
+        margin: 4
       },
       splitLine: { lineStyle: { color: '#eef0f3' } }
     },
@@ -481,14 +493,20 @@ onUnmounted(() => {
 .hero-amount {
   display: inline-flex; align-items: baseline; gap: 6px;
   font-family: 'Inter', sans-serif;
-  font-size: clamp(40px, 8vw, 64px);
+  font-size: clamp(36px, 8vw, 64px);
   font-weight: 800;
   letter-spacing: -0.03em;
-  line-height: 1;
+  line-height: 1.05;
   color: var(--text-strong);
   font-variant-numeric: tabular-nums;
   margin: 0;
+  max-width: 100%;
+  min-width: 0;
+  flex-wrap: wrap;
+  word-break: break-word;
+  overflow-wrap: anywhere;
 }
+.hero-amount-block { min-width: 0; max-width: 100%; }
 .amount-symbol { font-size: 0.5em; color: var(--text-muted); font-weight: 600; }
 .hero-trendline {
   display: inline-flex; align-items: baseline; gap: 10px;
