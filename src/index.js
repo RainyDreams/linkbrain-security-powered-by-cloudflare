@@ -1281,7 +1281,7 @@ export default {
 
                 if (await verifyPassword(password, env)) {
                     await clearLoginFailures(env, ip);
-                    return jsonResponse({ token: signToken(env) });
+                    return jsonResponse({ token: await signToken(env) });
                 }
 
                 await recordLoginFailure(env, ip);
@@ -1453,7 +1453,7 @@ export default {
                     if (!body) return await auditErrorResponse(env, request, '请求体非法', 400, 4300, {}, 'admin.trade');
 
                     const res = await placeOrder(env, body);
-                    ctx.waitUntil(matchOrders(env));
+                    ctx.waitUntil(matchOrders(env, { force: true }));
                     return res;
                 }
 

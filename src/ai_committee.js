@@ -2803,8 +2803,8 @@ export const confirmAiPendingActions = async (env, body = {}) => {
         });
     }
 
-    if (executed > 0 && Time.isContinuousAuction()) {
-        await matchOrders(env);
+    if (executed > 0) {
+        await matchOrders(env, { force: true });
     }
 
     return {
@@ -3851,8 +3851,8 @@ export const runAiCommittee = async (env, options = {}) => {
                     false,
                     { run_id: runId }
                 );
-            if (!dryRun && executionSummary.placed > 0 && Time.isContinuousAuction(cst)) {
-                await matchOrders(env);
+            if (!dryRun && executionSummary.placed > 0) {
+                await matchOrders(env, { force: true });
             }
         }
 
