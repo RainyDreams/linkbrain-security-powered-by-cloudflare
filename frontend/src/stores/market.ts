@@ -33,6 +33,7 @@ interface OrderItem {
     created_at: string;
     remark?: string;
     strategy_tag?: string;
+    source?: 'real' | 'debug' | 'simulated';
 }
 
 export const useMarketStore = defineStore('market', {
@@ -73,10 +74,11 @@ export const useMarketStore = defineStore('market', {
 
             this.loadingAdmin = true;
             try {
+                const inDebug = typeof document !== 'undefined' && document.documentElement.classList.contains('debug-mode');
                 const [dash, holds, ords] = await Promise.all([
                     api.getDashboard(),
                     api.getHoldings(),
-                    api.getOrders()
+                    api.getOrders(inDebug ? { debug: 1 } : undefined)
                 ]);
                 this.dashboard = dash;
                 this.holdings = holds;

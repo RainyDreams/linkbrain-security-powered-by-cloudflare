@@ -68,7 +68,7 @@ export default {
     match: (data?: { reason?: string }) => api.post('/admin/match', data || {}),
     initSystem: (confirm: 'RESET' | 'SYNC' = 'RESET') => api.post('/admin/init', { confirm }),
     getIntegrity: () => api.get('/admin/integrity'),
-    getOrders: () => api.get('/admin/orders'),
+    getOrders: (params?: { debug?: 0 | 1 }) => api.get('/admin/orders', { params: params || {} }),
     getHoldings: () => api.get('/admin/holdings'),
     transfer: (data: { amount: number; type: 'IN' | 'OUT'; request_id?: string }) => api.post('/admin/transfer', data),
     getAiState: () => api.get('/admin/ai/state'),

@@ -173,6 +173,7 @@ const toggleDebug = () => {
   if (key === localStorage.getItem('__debug_key')) {
     debugMode.value = !debugMode.value;
     document.documentElement.classList.toggle('debug-mode', debugMode.value);
+    store.fetchAdminData(false).catch(() => {});
     return;
   }
   if (typeof window !== 'undefined') {
@@ -186,6 +187,7 @@ const toggleDebug = () => {
           debugMode.value = true;
           document.documentElement.classList.add('debug-mode');
           localStorage.setItem('__debug_key', key);
+          store.fetchAdminData(false).catch(() => {});
         } else {
           window.alert('密钥错误，无法启用调试模式');
         }

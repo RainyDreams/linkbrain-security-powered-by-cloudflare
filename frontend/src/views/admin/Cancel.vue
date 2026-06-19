@@ -74,9 +74,12 @@
                 <div class="cell-code mono">{{ o.symbol }}</div>
               </td>
               <td>
-                <span :class="['side-pill', o.side === 'BUY' ? 'side-buy' : 'side-sell']">
-                  {{ o.side === 'BUY' ? 'B' : 'S' }}
-                </span>
+                <div class="side-cell">
+                  <span :class="['side-pill', o.side === 'BUY' ? 'side-buy' : 'side-sell']">
+                    {{ o.side === 'BUY' ? 'B' : 'S' }}
+                  </span>
+                  <span v-if="o.source === 'debug'" class="source-pill debug" title="调试订单 · 不影响真实统计">DBG</span>
+                </div>
               </td>
               <td class="is-num mono">¥{{ formatMoney(o.price) }}</td>
               <td class="is-num mono">
@@ -250,4 +253,16 @@ onMounted(refresh);
 .side-pill { display: inline-flex; align-items: center; justify-content: center; width: 22px; height: 22px; border-radius: 4px; font-size: 11px; font-weight: 800; }
 .side-pill.side-buy { background: var(--up-soft); color: var(--up); }
 .side-pill.side-sell { background: var(--down-soft); color: var(--down); }
+
+.side-cell { display: inline-flex; align-items: center; gap: 6px; }
+.source-pill {
+  display: inline-flex; align-items: center; padding: 1px 6px;
+  border-radius: 4px; font-size: 9.5px; font-weight: 800; letter-spacing: 0.06em;
+  font-family: var(--font-mono, ui-monospace, monospace);
+}
+.source-pill.debug {
+  color: var(--debug, #7c3aed);
+  background: var(--debug-soft, rgba(124,58,237,0.12));
+  border: 1px solid var(--debug-line, rgba(124,58,237,0.32));
+}
 </style>
