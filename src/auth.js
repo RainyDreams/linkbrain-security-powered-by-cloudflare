@@ -1,90 +1,79 @@
 // src/auth.js
+//
+// 自实现 JWT (HS256) 验证。
+// 关键点：必须与 jsonwebtoken 库字节级兼容（用同一种 base64url 编码 + Buffer 签名）。
+// 之前用 Web Crypto 的实现因为底层编码细节差异（特别是 base64url 边缘字符处理）
+// 在 Cloudflare Workers 上验证失败（返回 401），所以这里改用 node:crypto + node:buffer。
+//
+// 在 wrangler.toml 的 compatibility_flags = ["nodejs_compat"] 下，
+// node:crypto / node:buffer 在 Workers 中完全可用，并且与 jsonwebtoken 行为完全一致。
+
+import { createHmac, timingSafeEqual } from 'node:crypto';
 
 const enc = new TextEncoder();
-const dec = new TextDecoder();
 
 const b64UrlEncode = (input) => {
-    const bytes = typeof input === 'string' ? enc.encode(input) : input;
-    let bin = '';
-    for (let i = 0; i < bytes.length; i += 1) {
-        bin += String.fromCharCode(bytes[i]);
+    const buf = Buffer.isBuffer(input) ? input : Buffer.from(String(input), 'utf8');
+    return buf.toString('base64url');
+};
+
+const b64UrlDecode = (input) => {
+    return Buffer.from(String(input), 'base64url').toString('utf8');
+};
+
+const b64UrlDecodeToBuffer = (input) => {
+    return Buffer.from(String(input), 'base64url');
+};
+
+const hmacSignBase64Url = (data, secret) => {
+    return createHmac('sha256', secret).update(data, 'utf8').digest('base64url');
+};
+
+const hmacVerify = (data, secret, expectedB64Url) => {
+    const computed = createHmac('sha256', secret).update(data, 'utf8').digest();
+    const expected = b64UrlDecodeToBuffer(expectedB64Url);
+    if (computed.length !== expected.length) return false;
+    try {
+        return timingSafeEqual(computed, expected);
+    } catch {
+        return false;
     }
-    return btoa(bin).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/g, '');
 };
 
-const b64UrlDecodeToString = (input) => {
-    const pad = input.length % 4 === 0 ? '' : '='.repeat(4 - (input.length % 4));
-    const normalized = input.replace(/-/g, '+').replace(/_/g, '/') + pad;
-    const bin = atob(normalized);
-    return dec.decode(new Uint8Array(Array.from(bin).map((c) => c.charCodeAt(0))));
-};
-
-const b64UrlDecodeToBytes = (input) => {
-    const pad = input.length % 4 === 0 ? '' : '='.repeat(4 - (input.length % 4));
-    const normalized = input.replace(/-/g, '+').replace(/_/g, '/') + pad;
-    const bin = atob(normalized);
-    const out = new Uint8Array(bin.length);
-    for (let i = 0; i < bin.length; i += 1) {
-        out[i] = bin.charCodeAt(i);
-    }
-    return out;
-};
-
-const importHmacKey = async (secret) => {
-    return await crypto.subtle.importKey(
-        'raw',
-        enc.encode(secret),
-        { name: 'HMAC', hash: 'SHA-256' },
-        false,
-        ['sign', 'verify']
-    );
-};
-
-const constantTimeEqual = (a, b) => {
+const constantTimeEqualString = (a, b) => {
+    if (typeof a !== 'string' || typeof b !== 'string') return false;
     if (a.length !== b.length) return false;
-    let diff = 0;
-    for (let i = 0; i < a.length; i += 1) {
-        diff |= a.charCodeAt(i) ^ b.charCodeAt(i);
+    const bufA = Buffer.from(a, 'utf8');
+    const bufB = Buffer.from(b, 'utf8');
+    if (bufA.length !== bufB.length) return false;
+    try {
+        return timingSafeEqual(bufA, bufB);
+    } catch {
+        return false;
     }
-    return diff === 0;
-};
-
-const deriveHmacHex = async (secret, data) => {
-    const key = await importHmacKey(secret);
-    const sig = await crypto.subtle.sign('HMAC', key, enc.encode(data));
-    return Array.from(new Uint8Array(sig))
-        .map((b) => b.toString(16).padStart(2, '0'))
-        .join('');
-};
-
-const verifyHmacHex = async (secret, data, expectedHex) => {
-    if (typeof expectedHex !== 'string' || !expectedHex) return false;
-    const key = await importHmacKey(secret);
-    const expectedBytes = new Uint8Array(
-        (expectedHex.match(/.{1,2}/g) || []).map((h) => parseInt(h, 16))
-    );
-    if (expectedBytes.length === 0) return false;
-    return await crypto.subtle.verify('HMAC', key, expectedBytes, enc.encode(data));
 };
 
 export const verifyPassword = async (password, env) => {
     if (typeof password !== 'string' || !password) return false;
     if (!env.ADMIN_PASSWORD_HASH) return false;
 
-    const salt = enc.encode(env.ADMIN_PASSWORD_SALT || 'secure_default_salt');
-    const baseKey = await crypto.subtle.importKey('raw', enc.encode(password), 'PBKDF2', false, ['deriveBits']);
-
+    const salt = env.ADMIN_PASSWORD_SALT || 'secure_default_salt';
+    const baseKey = await crypto.subtle.importKey(
+        'raw',
+        enc.encode(password),
+        { name: 'PBKDF2' },
+        false,
+        ['deriveBits']
+    );
     const derivedBits = await crypto.subtle.deriveBits(
-        { name: 'PBKDF2', salt, iterations: 100000, hash: 'SHA-256' },
+        { name: 'PBKDF2', salt: enc.encode(salt), iterations: 100000, hash: 'SHA-256' },
         baseKey,
         256
     );
-
     const derivedHex = Array.from(new Uint8Array(derivedBits))
         .map((b) => b.toString(16).padStart(2, '0'))
         .join('');
-
-    return constantTimeEqual(derivedHex, String(env.ADMIN_PASSWORD_HASH));
+    return constantTimeEqualString(derivedHex, String(env.ADMIN_PASSWORD_HASH));
 };
 
 export const signToken = async (env) => {
@@ -100,10 +89,8 @@ export const signToken = async (env) => {
     const headerSeg = b64UrlEncode(JSON.stringify(header));
     const payloadSeg = b64UrlEncode(JSON.stringify(payload));
     const data = `${headerSeg}.${payloadSeg}`;
-    const sig = await deriveHmacHex(env.JWT_SECRET, data);
-    const sigBytes = new Uint8Array(sig.match(/.{1,2}/g).map((h) => parseInt(h, 16)));
-    const sigSeg = b64UrlEncode(sigBytes);
-    return `${data}.${sigSeg}`;
+    const signature = hmacSignBase64Url(data, env.JWT_SECRET);
+    return `${data}.${signature}`;
 };
 
 export const verifyAuth = async (request, env) => {
@@ -117,28 +104,11 @@ export const verifyAuth = async (request, env) => {
     if (!headerSeg || !payloadSeg || !sigSeg) return false;
 
     const data = `${headerSeg}.${payloadSeg}`;
-    let sigBytes;
-    try {
-        sigBytes = b64UrlDecodeToBytes(sigSeg);
-    } catch {
-        return false;
-    }
-    if (!sigBytes || sigBytes.length === 0) return false;
-    const sigHex = Array.from(sigBytes)
-        .map((b) => b.toString(16).padStart(2, '0'))
-        .join('');
-
-    let ok = false;
-    try {
-        ok = await verifyHmacHex(env.JWT_SECRET, data, sigHex);
-    } catch {
-        return false;
-    }
-    if (!ok) return false;
+    if (!hmacVerify(data, env.JWT_SECRET, sigSeg)) return false;
 
     let payload;
     try {
-        payload = JSON.parse(b64UrlDecodeToString(payloadSeg));
+        payload = JSON.parse(b64UrlDecode(payloadSeg));
     } catch {
         return false;
     }
