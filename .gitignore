@@ -2,7 +2,6 @@
 /all.txt
 /bundle.ps1
 /node_modules
-/package-lock.json
 /setup.ps1
 /.wrangler/
 /dist/
