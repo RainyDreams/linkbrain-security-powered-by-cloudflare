@@ -2,6 +2,7 @@ name = "zero-ben-backend"
 main = "src/index.js"
 compatibility_date = "2024-10-01"
 compatibility_flags = [ "nodejs_compat" ]
+
 # 数据库绑定
 [[d1_databases]]
 binding = "DB"
@@ -19,22 +20,27 @@ crons = [
     "* * * * *"  # 每分钟触发一次，内部逻辑判断时间
 ]
 
+# ----------------------------------------------------------------------------
+# [vars] 纯文本配置（CF Dashboard 可见，编译进 Worker）
+# 敏感值请用 `wrangler secret put <NAME>` 注入。
+# ----------------------------------------------------------------------------
 [vars]
-JWT_SECRET = "linkbrainsecurity"
 ADMIN_PASSWORD_SALT = "lingbenzhengquanjiaoyi"
 ADMIN_PASSWORD_HASH = "90a13d07ea4dbdd759b841d4cc0874e31ae3a4d4b38b1d708547dea7297475fd"
-# AI provider default models (override via env secrets)
 XIAOMI_MIMO_MODEL = "mimo-7b"
 XIAOMI_MIMO_BASE_URL = "https://api.xiaomimimo.com/v1"
 DEEPSEEK_MODEL = "deepseek-chat"
 DEEPSEEK_BASE_URL = "https://api.deepseek.com/v1"
 GEMINI_MODEL = "gemini-flash-lite-latest"
 GEMINI_MODELS = "gemini-flash-lite-latest,gemini-2.5-flash-lite,gemini-flash-latest,gemini-2.5-flash,gemini-3-flash-preview"
-# Per-role provider override (set to mimo / deepseek / gemini)
-AI_PROVIDER_PRESIDENT = "mimo"
-AI_PROVIDER_REASONER = "mimo"
-AI_PROVIDER_ECONOMIST_1 = "deepseek"
-AI_PROVIDER_ECONOMIST_2 = "deepseek"
-AI_PROVIDER_MANAGER = "deepseek"
-# DEBUG_KEY: set via `wrangler secret put DEBUG_KEY` for production. The value below is a 512-bit CSPRNG key.
-DEBUG_KEY = "jxxkKOc3urdEu7l5E68FDnfBDoRJLbXr0o0L1Kn9R6xYMB32v-7DAB07TehJc9U-oa1OhfEFOZ6H-M3XryBzKQ"
+# Role → provider 默认值在 src/providers/llm.js 的 ROLE_DEFAULTS 中。
+# 想要覆盖某角色的 provider 时，请用 wrangler secret put AI_PROVIDER_<ROLE>=mimo|deepseek|gemini。
+
+# ----------------------------------------------------------------------------
+# Secret 配置（CF Dashboard 隐藏值；用 wrangler secret put 注入）
+#   wrangler secret put JWT_SECRET
+#   wrangler secret put DEBUG_KEY
+#   wrangler secret put DEEPSEEK_API_KEY
+#   wrangler secret put GEMINI_API_KEY
+#   wrangler secret put XIAOMI_MIMO_API_KEY
+# ----------------------------------------------------------------------------

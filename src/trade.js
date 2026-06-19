@@ -249,7 +249,8 @@ const validateOrderInput = (body, marketData) => {
     };
 };
 
-export const placeOrder = async (env, body) => {
+export const placeOrder = async (env, body, options = {}) => {
+    const source = String(options.source || body?.source || (body?._debug ? 'debug' : 'real')).slice(0, 16);
     const symbolInput = typeof body?.symbol === 'string' ? body.symbol.trim() : '';
     if (!symbolInput) return await auditReject(env, 'symbol 不能为空', 4007, 400, {}, 'trade.place');
 
@@ -327,7 +328,7 @@ export const placeOrder = async (env, body) => {
                 }
 
                 const insertRes = await env.DB.prepare(
-                    "INSERT INTO orders (symbol, name, side, price, qty, freeze_amount, status, remark, strategy_tag) VALUES (?, ?, 'BUY', ?, ?, ?, 'PENDING', ?, ?)"
+                    "INSERT INTO orders (symbol, name, side, price, qty, freeze_amount, status, remark, strategy_tag, source) VALUES (?, ?, 'BUY', ?, ?, ?, 'PENDING', ?, ?, ?)"
                 ).bind(symbol, name, priceCent, qty, freeze, remark, strategy_tag).run();
                 if (dbChanges(insertRes) === 0) throw new Error('order insert failed');
 
@@ -392,7 +393,7 @@ export const placeOrder = async (env, body) => {
                 }
 
                 const insertRes = await env.DB.prepare(
-                    "INSERT INTO orders (symbol, name, side, price, qty, status, remark, strategy_tag) VALUES (?, ?, 'SELL', ?, ?, 'PENDING', ?, ?)"
+                    "INSERT INTO orders (symbol, name, side, price, qty, status, remark, strategy_tag, source) VALUES (?, ?, 'SELL', ?, ?, 'PENDING', ?, ?, ?)"
                 ).bind(symbol, name, priceCent, qty, remark, strategy_tag).run();
                 if (dbChanges(insertRes) === 0) throw new Error('order insert failed');
 
@@ -591,14 +592,15 @@ export const matchOrders = async (env, options = {}) => {
         const isMatch = o.side === 'BUY' ? (o.price >= curr) : (o.price <= curr);
         if (isMatch) {
             triggered += 1;
-            await executeTrade(env, o, curr);
+            await executeTrade(env, o, curr, { source: o?.source || 'real' });
         }
     }
 
     return { skipped: false, checked: orders.length, triggered, forced: force };
 };
 
-async function executeTrade(env, order, exePrice) {
+async function executeTrade(env, order, exePrice, options = {}) {
+    const tradeSource = String(options.source || order?.source || 'real').slice(0, 16);
     const claimRes = await env.DB.prepare(
         "UPDATE orders SET status='MATCHING', updated_at=CURRENT_TIMESTAMP WHERE id=? AND status='PENDING'"
     ).bind(order.id).run();
@@ -697,8 +699,8 @@ async function executeTrade(env, order, exePrice) {
             }
 
             const tradeRes = await env.DB.prepare(`
-                INSERT INTO trades (order_id, symbol, name, side, price, qty, amount, commission, tax, pre_pos_ratio, post_pos_ratio)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                INSERT INTO trades (order_id, symbol, name, side, price, qty, amount, commission, tax, pre_pos_ratio, post_pos_ratio, source)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             `).bind(
                 freshOrder.id,
                 freshOrder.symbol,
@@ -710,7 +712,8 @@ async function executeTrade(env, order, exePrice) {
                 fee,
                 tax,
                 prePosRatio,
-                postPosRatio
+                postPosRatio,
+                tradeSource
             ).run();
             if (dbChanges(tradeRes) === 0) throw new Error('trade insert failed');
 

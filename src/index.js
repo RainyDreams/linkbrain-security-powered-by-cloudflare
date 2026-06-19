@@ -20,6 +20,7 @@ import {
 } from './ai_committee.js';
 import {
     handleDebugCleanupLogs,
+    handleDebugQuery,
     handleDebugSimulateMatch,
     handleDebugVerify,
     isDebugEnabled
@@ -1085,7 +1086,7 @@ export default {
                 const account = await env.DB.prepare('SELECT * FROM account WHERE id=1').first();
                 const { results: holdings } = await env.DB.prepare('SELECT * FROM holdings WHERE quantity > 0').all();
                 const { results: logs } = await env.DB.prepare(
-                    "SELECT *, datetime(trade_time, '+8 hours') AS trade_time_cst FROM trades ORDER BY id DESC LIMIT 20"
+                    "SELECT *, datetime(trade_time, '+8 hours') AS trade_time_cst FROM trades WHERE source != 'debug' ORDER BY id DESC LIMIT 20"
                 ).all();
                 const { results: snaps } = await env.DB.prepare('SELECT * FROM snapshots ORDER BY date ASC').all();
                 let aiPublic = {
@@ -1308,6 +1309,9 @@ export default {
                 if (url.pathname === '/api/admin/debug/cleanup-logs') {
                     return await handleDebugCleanupLogs(request, env);
                 }
+                if (url.pathname === '/api/admin/debug/query') {
+                    return await handleDebugQuery(request, env);
+                }
                 return errorResponse('Not Found', 404, 4040);
             }
 
@@ -1347,17 +1351,20 @@ export default {
                     const since = new Date(cstNow.getTime() - (days - 1) * 24 * 60 * 60 * 1000);
                     const sinceCst = `${Time.formatCSTDate(since)} 00:00:00`;
 
+                    const includeDebug = url.searchParams.get('debug') === '1';
+                    const debugFilter = includeDebug ? '' : "AND source != 'debug'";
                     const { results } = await env.DB.prepare(`
                         SELECT *, datetime(created_at, '+8 hours') AS created_at_cst
                         FROM orders
-                        WHERE status = 'PENDING'
-                           OR datetime(created_at, '+8 hours') >= ?
+                        WHERE (status = 'PENDING' OR datetime(created_at, '+8 hours') >= ?)
+                          ${debugFilter}
                         ORDER BY id DESC
                         LIMIT 1000
                     `).bind(sinceCst).all();
                     return jsonResponse((results || []).map((o) => ({
                         ...o,
                         price: Money.toYuan(o.price),
+                        source: String(o.source || 'real'),
                         remark: String(o.remark || ''),
                         strategy_tag: String(o.strategy_tag || ''),
                         time: String(o.created_at_cst || o.created_at || '').substring(11, 19)
@@ -1475,7 +1482,11 @@ export default {
                     const body = await parseBody(request);
                     if (!body) return await auditErrorResponse(env, request, '请求体非法', 400, 4300, {}, 'admin.trade');
 
-                    const res = await placeOrder(env, body);
+                    // X-Source: debug 头允许管理员在调试模式下下单，订单标记为 source='debug'
+                    // 不参与公开看板统计；只通过 ?debug=1 参数在管理端可见
+                    const reqSource = (request.headers.get('x-source') || request.headers.get('X-Source') || '').toLowerCase();
+                    const orderSource = reqSource === 'debug' ? 'debug' : 'real';
+                    const res = await placeOrder(env, body, { source: orderSource });
                     ctx.waitUntil(matchOrders(env, { force: true }));
                     return res;
                 }

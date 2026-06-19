@@ -134,11 +134,11 @@ export const handleDebugSimulateMatch = async (request, env, ctx) => {
                 }
 
                 await env.DB.prepare(
-                    `INSERT INTO trades (order_id, symbol, name, side, price, qty, amount, commission, tax, pre_pos_ratio, post_pos_ratio)
-                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+                    `INSERT INTO trades (order_id, symbol, name, side, price, qty, amount, commission, tax, pre_pos_ratio, post_pos_ratio, source)
+                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
                 ).bind(
                     freshOrder.id, freshOrder.symbol, freshOrder.name, freshOrder.side,
-                    exePrice, qty, tradeAmt, fee, tax, 0, 0
+                    exePrice, qty, tradeAmt, fee, tax, 0, 0, 'debug'
                 ).run();
 
                 await env.DB.prepare(
@@ -210,6 +210,29 @@ export const handleDebugSimulateMatch = async (request, env, ctx) => {
  * Cleanup old logs to keep the DB small.
  * Defaults: technical/financial audit older than 90 days, login_attempts older than 30 days.
  */
+// Debug SQL query (read-only)
+export const handleDebugQuery = async (request, env) => {
+    if (!isDebugEnabled(env)) return errorResponse('Debug 模式未启用', 403, 9001);
+    if (!verifyDebugKey(request, env)) return errorResponse('Debug 密钥错误', 401, 9002);
+
+    let body = {};
+    try { body = await request.json(); } catch { body = {}; }
+    const sql = String(body?.sql || '').trim();
+    if (!sql) return errorResponse('sql 不能为空', 400, 9003);
+    // Only allow SELECT/PRAGMA/EXPLAIN
+    const upper = sql.toUpperCase().replace(/\s+/g, ' ').trim();
+    const allowed = upper.startsWith('SELECT') || upper.startsWith('PRAGMA') || upper.startsWith('EXPLAIN');
+    if (!allowed) return errorResponse('仅支持 SELECT/PRAGMA/EXPLAIN', 400, 9004);
+
+    try {
+        const stmt = env.DB.prepare(sql);
+        const res = await (upper.startsWith('SELECT') ? stmt.all() : stmt.run());
+        return jsonResponse({ ok: true, results: res?.results || [], meta: res?.meta || null });
+    } catch (e) {
+        return errorResponse('query failed: ' + String(e?.message || e), 500, 9005);
+    }
+};
+
 export const handleDebugCleanupLogs = async (request, env) => {
     if (!isDebugEnabled(env)) return errorResponse('Debug 模式未启用', 403, 9001);
     if (!verifyDebugKey(request, env)) return errorResponse('Debug 密钥错误', 401, 9002);
