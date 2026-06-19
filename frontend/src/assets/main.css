@@ -401,6 +401,45 @@ p { margin: 0; }
 .scroll-thin::-webkit-scrollbar-thumb:hover { background: rgba(15, 17, 21, 0.28); background-clip: padding-box; border: 2px solid transparent; }
 .scroll-thin::-webkit-scrollbar-track { background: transparent; }
 
+/* Global modern scrollbars */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(15, 17, 21, 0.18) transparent;
+}
+*::-webkit-scrollbar { width: 10px; height: 10px; }
+*::-webkit-scrollbar-track { background: transparent; margin: 2px; }
+*::-webkit-scrollbar-thumb {
+  background: rgba(15, 17, 21, 0.20);
+  border-radius: 999px;
+  border: 2px solid var(--bg);
+  background-clip: padding-box;
+  transition: background-color 0.15s ease;
+}
+*::-webkit-scrollbar-thumb:hover { background: rgba(15, 17, 21, 0.40); background-clip: padding-box; border: 2px solid var(--bg); }
+*::-webkit-scrollbar-thumb:active { background: var(--brand); background-clip: padding-box; border: 2px solid var(--bg); }
+*::-webkit-scrollbar-corner { background: transparent; }
+
+/* Dark theme scrollbar for surfaces */
+.surface *::-webkit-scrollbar-thumb,
+.panel *::-webkit-scrollbar-thumb {
+  background: rgba(15, 17, 21, 0.14);
+  border: 2px solid var(--bg-elev);
+}
+.surface *::-webkit-scrollbar-thumb:hover,
+.panel *::-webkit-scrollbar-thumb:hover {
+  background: rgba(15, 17, 21, 0.28);
+}
+.surface,
+.panel {
+  scrollbar-color: rgba(15, 17, 21, 0.14) transparent;
+}
+
+/* Mobile: thinner scrollbar, no extra margin */
+@media (max-width: 720px) {
+  *::-webkit-scrollbar { width: 6px; height: 6px; }
+  *::-webkit-scrollbar-thumb { border: 1px solid var(--bg); }
+}
+
 /* ---------- Page transitions ---------- */
 .page-fade-enter-active, .page-fade-leave-active {
   transition: opacity 0.16s ease, transform 0.16s ease;

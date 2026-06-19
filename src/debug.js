@@ -216,11 +216,14 @@ export const handleDebugCleanupLogs = async (request, env) => {
 
     let body = {};
     try { body = await request.json(); } catch { body = {}; }
-    const auditDays = Math.max(7, Math.min(3650, Number(body?.audit_days ?? 90)));
+    // 全部日志默认保留 30 天（除 AI 详情 7 天）
+    const auditDays = Math.max(1, Math.min(3650, Number(body?.audit_days ?? 30)));
     const loginDays = Math.max(1, Math.min(365, Number(body?.login_days ?? 30)));
     const pendingTaskDays = Math.max(1, Math.min(365, Number(body?.task_days ?? 30)));
-    const runRecordDays = Math.max(7, Math.min(730, Number(body?.run_record_days ?? 180)));
+    const runRecordDays = Math.max(1, Math.min(730, Number(body?.run_record_days ?? 30)));
     const newsDays = Math.max(1, Math.min(60, Number(body?.news_days ?? 7)));
+    const transferDays = Math.max(1, Math.min(365, Number(body?.transfer_days ?? 30)));
+    const commentDays = Math.max(1, Math.min(365, Number(body?.comment_days ?? 30)));
 
     const purge = async (sql, params) => {
         try {
@@ -253,6 +256,14 @@ export const handleDebugCleanupLogs = async (request, env) => {
         ai_rss_cache: await purge(
             "DELETE FROM meta WHERE key='ai.rss.cache' AND updated_at < datetime('now', ?)",
             [`-${newsDays} days`]
+        ),
+        bank_transfers: await purge(
+            "DELETE FROM bank_transfers WHERE created_at IS NOT NULL AND created_at < datetime('now', ?)",
+            [`-${transferDays} days`]
+        ),
+        comments: await purge(
+            "DELETE FROM comments WHERE created_at IS NOT NULL AND created_at < datetime('now', ?)",
+            [`-${commentDays} days`]
         )
     };
 
@@ -263,8 +274,8 @@ export const handleDebugCleanupLogs = async (request, env) => {
         subcategory: 'purge',
         status: 'SUCCESS',
         message: 'debug log cleanup run',
-        meta: { summary, params: { auditDays, loginDays, pendingTaskDays, runRecordDays, newsDays } }
+        meta: { summary, params: { auditDays, loginDays, pendingTaskDays, runRecordDays, newsDays, transferDays, commentDays } }
     });
 
-    return jsonResponse({ ok: true, summary, params: { auditDays, loginDays, pendingTaskDays, runRecordDays, newsDays } });
+    return jsonResponse({ ok: true, summary, params: { auditDays, loginDays, pendingTaskDays, runRecordDays, newsDays, transferDays, commentDays } });
 };

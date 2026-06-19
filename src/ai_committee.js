@@ -1240,11 +1240,6 @@ const computePerformance = async (env, accountContext, quoteMap) => {
 };
 
 const callGeminiJson = async (env, role, systemPrompt, payload, temperature = 0.35, runtimeLimits = {}) => {
-    const apiKey = resolveGeminiApiKey(env);
-    if (!apiKey) {
-        throw new Error('missing Gemini API key (set GEMINI_API_KEY / GOOGLE_API_KEY / GOOGLE_GENERATIVE_AI_API_KEY / GEMINI_KEY)');
-    }
-
     const cstDate = asTrimmed(runtimeLimits?.cst_date) || Time.formatCSTDate();
     const maxRequests = clampInt(
         parseIntSafe(runtimeLimits?.gemini_max_requests, DEFAULT_GEMINI_MAX_REQUESTS),
@@ -1252,19 +1247,27 @@ const callGeminiJson = async (env, role, systemPrompt, payload, temperature = 0.
         MAX_GEMINI_MAX_REQUESTS
     );
 
-    const schema = getRoleOutputSchema(role);
-    const modelCandidates = resolveGeminiModelCandidates(env);
-    const cooldownMap = await getGeminiModelCooldownMap(env, runtimeLimits);
-    const errors = [];
-    const errorDetails = [];
-    let cooldownDirty = false;
+    if (runtimeLimits?.gemini_request_limit_exceeded === true) {
+        const budgetErr = new Error(`gemini request budget exceeded for ${role}`);
+        budgetErr.kind = 'gemini_request_budget_exceeded';
+        throw budgetErr;
+    }
 
+    const usage = await recordGeminiRequestUsage(env, cstDate, maxRequests, runtimeLimits);
+    if (usage.over_limit) {
+        const err = new Error(`gemini request budget exceeded for ${role} (${usage.current}/${usage.limit})`);
+        err.kind = 'gemini_request_budget_exceeded';
+        throw err;
+    }
+
+    const schema = getRoleOutputSchema(role);
+    const cooldownMap = await getGeminiModelCooldownMap(env, runtimeLimits);
+    let cooldownDirty = false;
     const markModelCooldown = (model, cooldownMs) => {
         const ms = clampInt(parseIntSafe(cooldownMs, GEMINI_MODEL_ERROR_COOLDOWN_MS), 1000, GEMINI_MODEL_COOLDOWN_MAX_MS);
         cooldownMap[normalizeGeminiModel(model)] = Date.now() + ms;
         cooldownDirty = true;
     };
-
     const clearModelCooldown = (model) => {
         const key = normalizeGeminiModel(model);
         if (!cooldownMap[key]) return;
@@ -1272,195 +1275,100 @@ const callGeminiJson = async (env, role, systemPrompt, payload, temperature = 0.
         cooldownDirty = true;
     };
 
-    const now = Date.now();
-    const scheduledModels = modelCandidates
-        .map((model) => ({
-            model,
-            cooldown_until: Number(cooldownMap[normalizeGeminiModel(model)] || 0)
-        }))
-        .sort((a, b) => a.cooldown_until - b.cooldown_until);
+    const startedAt = Date.now();
+    try {
+        await applyGeminiPacing(runtimeLimits, GEMINI_MIN_REQUEST_INTERVAL_MS);
+        const result = await callLLMJson(env, role, systemPrompt, payload, {
+            temperature,
+            schema,
+            timeoutMs: 30000
+        });
 
-    const selectableModels = scheduledModels.filter((x) => x.cooldown_until <= now);
-    if (!selectableModels.length) {
-        const earliest = scheduledModels[0] || { model: modelCandidates[0] || '', cooldown_until: now + GEMINI_MODEL_ERROR_COOLDOWN_MS };
-        const waitMs = Math.max(0, Number(earliest.cooldown_until || 0) - now);
-        if (isObject(runtimeLimits)) {
-            runtimeLimits.gemini_block_until = Math.max(Number(runtimeLimits.gemini_block_until || 0), now + waitMs);
+        const attemptSummary = (result.attempts || []).map((a, idx) => ({
+            idx: idx + 1, provider: a.provider, model: a.model, ok: !!a.ok,
+            duration_ms: a.duration_ms || 0,
+            status: a.status || null,
+            message: a.message || ''
+        }));
+        const last = attemptSummary[attemptSummary.length - 1];
+        if (last && last.provider === 'gemini' && last.model) {
+            clearModelCooldown(last.model);
         }
-        const err = new Error(`all models in cooldown for ${role}`);
-        err.kind = 'gemini_models_cooling_down';
-        err.details = [{
-            model: earliest.model,
-            status: 429,
-            message: `gemini models cooling down (cooldown_ms=${waitMs})`,
-            cooldown_ms: waitMs
-        }];
+        if (cooldownDirty) await saveGeminiModelCooldownMap(env, runtimeLimits, cooldownMap);
+
+        await logRoleCallAudit(env, {
+            role,
+            provider: result.provider,
+            model: result.model,
+            attempts: attemptSummary,
+            ok: true,
+            duration_ms: result.duration_ms,
+            prompt_chars: systemPrompt.length,
+            payload_chars: safeJsonStringify(payload || {}, '').length
+        });
+        return result.parsed;
+    } catch (error) {
+        const attempts = (error?.attempts || []).map((a, idx) => ({
+            idx: idx + 1, provider: a.provider, model: a.model, ok: !!a.ok,
+            duration_ms: a.duration_ms || 0,
+            status: a.status || null,
+            message: String(a.message || '').slice(0, 220)
+        }));
+        const last = attempts[attempts.length - 1];
+        if (last && last.provider === 'gemini' && last.model && Number(last.status || 0) >= 500) {
+            markModelCooldown(last.model, GEMINI_MODEL_ERROR_COOLDOWN_MS);
+        }
+        if (cooldownDirty) await saveGeminiModelCooldownMap(env, runtimeLimits, cooldownMap);
+
+        const reason = String(error?.message || error || 'unknown').slice(0, 220);
+        await logRoleCallAudit(env, {
+            role,
+            provider: last?.provider || '',
+            model: last?.model || '',
+            attempts,
+            ok: false,
+            duration_ms: Date.now() - startedAt,
+            prompt_chars: systemPrompt.length,
+            payload_chars: safeJsonStringify(payload || {}, '').length,
+            error: reason
+        });
+
+        const err = new Error(reason);
+        err.kind = error?.kind || 'llm_all_providers_failed';
+        err.attempts = attempts;
         throw err;
     }
+};
 
-    modelLoop:
-    for (const { model } of selectableModels) {
-        const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent?key=${encodeURIComponent(apiKey)}`;
-
-        const generationConfig = {
-            temperature: clampNumber(temperature, 0, 1),
-            topP: 0.9,
-            responseMimeType: 'application/json'
-        };
-        if (schema) {
-            generationConfig.responseSchema = schema;
-        }
-
-        const requestBody = {
-            systemInstruction: {
-                parts: [{ text: systemPrompt }]
-            },
-            contents: [{
-                role: 'user',
-                parts: [{ text: safeJsonStringify(payload, '{}') }]
-            }],
-            generationConfig
-        };
-
-        for (let attempt = 0; attempt <= GEMINI_MAX_RETRIES_PER_MODEL; attempt += 1) {
-            try {
-                if (runtimeLimits?.gemini_request_limit_exceeded === true) {
-                    const budgetErr = new Error(`gemini request budget exceeded for ${role}`);
-                    budgetErr.kind = 'gemini_request_budget_exceeded';
-                    throw budgetErr;
-                }
-                const usage = await recordGeminiRequestUsage(env, cstDate, maxRequests, runtimeLimits);
-                if (usage.over_limit) {
-                    const detail = {
-                        model,
-                        attempt: attempt + 1,
-                        status: 0,
-                        message: `internal_budget_advisory_exceeded_${usage.current}/${usage.limit}`,
-                        raw: ''
-                    };
-                    errorDetails.push(detail);
-                    errors.push(`${model}: ${detail.message}`);
-                    const err = new Error(`gemini request budget exceeded for ${role}`);
-                    err.kind = 'gemini_request_budget_exceeded';
-                    err.details = errorDetails.slice(-MAX_GEMINI_ERROR_DETAILS);
-                    throw err;
-                }
-
-                await applyGeminiPacing(runtimeLimits, GEMINI_MIN_REQUEST_INTERVAL_MS);
-                const response = await fetch(endpoint, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(requestBody)
-                });
-
-                const raw = await response.text();
-                if (!response.ok) {
-                    const errPayload = safeJsonParse(raw, null);
-                    const errMsg = asTrimmed(errPayload?.error?.message || errPayload?.message || '').slice(0, 180);
-                    const retryAfterHeader = response.headers.get('retry-after') || '';
-                    const detail = {
-                        model,
-                        attempt: attempt + 1,
-                        status: response.status,
-                        retry_after: retryAfterHeader,
-                        message: errMsg || '',
-                        raw: String(raw || '').slice(0, MAX_GEMINI_ERROR_RAW)
-                    };
-                    errorDetails.push(detail);
-                    errors.push(errMsg ? `${model}: http_${response.status}:${errMsg}` : `${model}: http_${response.status}`);
-
-                    const isRateLimited = response.status === 429;
-                    const canRetry = GEMINI_RETRYABLE_STATUS.has(response.status) && attempt < GEMINI_MAX_RETRIES_PER_MODEL;
-                    if (canRetry) {
-                        const retryAfterMs = parseRetryAfterMs(retryAfterHeader);
-                        const backoffMs = retryAfterMs > 0 ? retryAfterMs : (400 * (attempt + 1));
-                        await sleep(backoffMs);
-                        continue;
-                    }
-                    if (isRateLimited) {
-                        if (isObject(runtimeLimits)) {
-                            const retryAfterMs = parseRetryAfterMs(retryAfterHeader);
-                            const cooldownMs = clampInt(
-                                Math.max(GEMINI_429_MIN_COOLDOWN_MS, retryAfterMs || 0),
-                                GEMINI_429_MIN_COOLDOWN_MS,
-                                GEMINI_429_GLOBAL_COOLDOWN_MAX_MS
-                            );
-                            runtimeLimits.gemini_block_until = Math.max(
-                                Number(runtimeLimits.gemini_block_until || 0),
-                                Date.now() + cooldownMs
-                            );
-                            runtimeLimits.gemini_api_throttled = true;
-                            runtimeLimits.gemini_rate_limited = true;
-                        }
-                        markModelCooldown(model, Math.max(GEMINI_MODEL_429_COOLDOWN_MS, parseRetryAfterMs(retryAfterHeader)));
-                        break;
-                    }
-                    markModelCooldown(model, GEMINI_MODEL_ERROR_COOLDOWN_MS);
-                    break;
-                }
-
-                const json = safeJsonParse(raw, null);
-                const parts = json?.candidates?.[0]?.content?.parts || [];
-                const text = parts.map((x) => String(x?.text || '')).join('\n').trim();
-                const parsed = tryParseModelJson(text);
-                if (!parsed) {
-                    errorDetails.push({
-                        model,
-                        attempt: attempt + 1,
-                        status: response.status,
-                        message: 'invalid_json',
-                        raw: String(raw || '').slice(0, MAX_GEMINI_ERROR_RAW)
-                    });
-                    errors.push(`${model}: invalid_json`);
-                    markModelCooldown(model, GEMINI_MODEL_ERROR_COOLDOWN_MS);
-                    break;
-                }
-                clearModelCooldown(model);
-                if (cooldownDirty) await saveGeminiModelCooldownMap(env, runtimeLimits, cooldownMap);
-                return parsed;
-            } catch (error) {
-                if (String(error?.kind || '') === 'gemini_request_budget_exceeded') {
-                    break modelLoop;
-                }
-                const msg = String(error?.message || error || 'request_failed').slice(0, 240);
-                errorDetails.push({
-                    model,
-                    attempt: attempt + 1,
-                    status: 0,
-                    message: msg,
-                    raw: ''
-                });
-                errors.push(`${model}: ${msg.slice(0, 180)}`);
-                markModelCooldown(model, GEMINI_MODEL_ERROR_COOLDOWN_MS);
-                const canRetry = attempt < GEMINI_MAX_RETRIES_PER_MODEL;
-                if (canRetry) {
-                    await sleep(350 * (attempt + 1));
-                    continue;
-                }
+const logRoleCallAudit = async (env, info) => {
+    try {
+        await logBizError(env, {
+            level: info.ok ? 'INFO' : 'WARN',
+            status: info.ok ? 200 : Number(info.attempts?.[0]?.status || 502),
+            scope: `ai.role.${info.role}.${info.provider || 'unknown'}`,
+            category: 'ai',
+            subcategory: 'role_call',
+            message: info.ok
+                ? `${info.role} role call OK via ${info.provider}/${info.model} (${info.duration_ms}ms, prompt=${info.prompt_chars}ch, payload=${info.payload_chars}ch)`
+                : `${info.role} role call FAILED via ${info.provider || 'unknown'}: ${info.error || 'unknown'}`,
+            meta: {
+                role: info.role,
+                provider: info.provider,
+                model: info.model,
+                ok: info.ok,
+                duration_ms: info.duration_ms,
+                prompt_chars: info.prompt_chars,
+                payload_chars: info.payload_chars,
+                attempts: info.attempts
             }
-        }
-    }
-
-    if (cooldownDirty) await saveGeminiModelCooldownMap(env, runtimeLimits, cooldownMap);
-
-    const hasApiRateLimited = errorDetails.some((x) => Number(x?.status || 0) === 429);
-    if (hasApiRateLimited) {
-        const err = new Error(`gemini api rate limited for ${role}`);
-        err.kind = 'gemini_api_rate_limited';
-        err.details = errorDetails.slice(-MAX_GEMINI_ERROR_DETAILS);
-        throw err;
-    }
-
-    const err = new Error(`all models failed for ${role}: ${errors.join(' | ')}`);
-    err.kind = 'gemini_all_models_failed';
-    err.details = errorDetails.slice(-MAX_GEMINI_ERROR_DETAILS);
-    throw err;
+        });
+    } catch { /* swallow logging errors to avoid masking the real error */ }
 };
 
 const safeRoleCall = async (env, role, prompt, payload, fallback, temperature = 0.35, runtimeLimits = {}) => {
     const buildFallbackWithReason = (reasonText = '') => (
         isObject(fallback)
-            ? { ...fallback, risk_note: String(reasonText || 'gemini failed').slice(0, 220) }
+            ? { ...fallback, risk_note: String(reasonText || 'llm failed').slice(0, 220) }
             : fallback
     );
 
@@ -1468,53 +1376,50 @@ const safeRoleCall = async (env, role, prompt, payload, fallback, temperature = 
         const data = await callGeminiJson(env, role, prompt, payload, temperature, runtimeLimits);
         return { ok: true, data, error: '' };
     } catch (error) {
-        const details = Array.isArray(error?.details) ? error.details : [];
-        const isApiRateLimited = details.some((x) => Number(x?.status || 0) === 429)
-            || String(error?.kind || '') === 'gemini_api_rate_limited';
-        const rawReason = String(error?.message || error || 'gemini failed').slice(0, 220);
-        const normalizedReason = isApiRateLimited
-            ? 'gemini API rate limited (HTTP 429)'
+        const attempts = Array.isArray(error?.attempts) ? error.attempts : [];
+        const isRateLimited = attempts.some((x) => Number(x?.status || 0) === 429);
+        const lastAttempt = attempts.length > 0 ? attempts[attempts.length - 1] : null;
+        const rawReason = String(error?.message || error || 'llm failed').slice(0, 220);
+        const normalizedReason = isRateLimited
+            ? 'LLM API rate limited (HTTP 429)'
             : rawReason.replace(/quota[_\s-]*exhausted/gi, 'internal_budget_advisory_exceeded');
         const fallbackWithReason = buildFallbackWithReason(normalizedReason);
 
-        if (isApiRateLimited && isObject(runtimeLimits)) {
+        if (isRateLimited && isObject(runtimeLimits)) {
             runtimeLimits.gemini_api_throttled = true;
+            runtimeLimits.gemini_rate_limited = true;
         }
 
         await logBizError(env, {
-            status: isApiRateLimited ? 429 : 502,
+            status: isRateLimited ? 429 : 502,
             scope: `ai.role.${role}`,
             category: 'ai',
-            subcategory: 'gemini',
-            message: isApiRateLimited ? 'gemini role call failed: API rate limited' : 'gemini role call failed',
-            meta: { role, error: normalizedReason, details }
+            subcategory: 'llm',
+            message: isRateLimited ? 'role call failed: API rate limited' : 'role call failed',
+            meta: {
+                role,
+                error: normalizedReason,
+                provider_chain: attempts.map((a) => a.provider).filter(Boolean),
+                attempts
+            }
         });
-        const throttleCount = details.filter((x) => Number(x?.status || 0) === 429).length;
-        const lastDetail = details.length > 0 ? details[details.length - 1] : null;
-        const lastStatus = Number(lastDetail?.status || 0);
-        const lastMessageRaw = String(lastDetail?.message || '');
-        const lastMessage = lastStatus === 429
-            ? (String(error?.kind || '') === 'gemini_models_cooling_down'
-                ? 'gemini_models_cooling_down'
-                : 'gemini_api_rate_limited')
-            : lastMessageRaw.replace(/quota[_\s-]*exhausted/gi, 'internal_budget_advisory_exceeded');
+
         return {
             ok: false,
             data: fallbackWithReason,
             error: normalizedReason,
             diagnostics: {
                 error_kind: String(error?.kind || ''),
-                throttle_count: throttleCount,
-                last_status: lastStatus,
-                last_model: String(lastDetail?.model || ''),
-                last_message: lastMessage,
-                last_raw: String(lastDetail?.raw || '').slice(0, 600)
+                throttle_count: attempts.filter((x) => Number(x?.status || 0) === 429).length,
+                last_status: Number(lastAttempt?.status || 0),
+                last_provider: String(lastAttempt?.provider || ''),
+                last_model: String(lastAttempt?.model || ''),
+                last_message: String(lastAttempt?.message || ''),
+                last_raw: ''
             }
         };
     }
-};
-
-const buildRiskLimits = (presidentData, config) => {
+};const buildRiskLimits = (presidentData, config) => {
     const raw = isObject(presidentData?.risk_limits) ? presidentData.risk_limits : {};
     const penaltyTotal = Number(config.manager_penalty || 0) + Number(config.president_penalty || 0);
     const penaltyFactor = Math.max(0.4, 1 - penaltyTotal * 0.01);

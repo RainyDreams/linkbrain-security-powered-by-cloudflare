@@ -22,6 +22,7 @@ const acquireDailyJobLock = async (env, jobName, cstDate) => {
 };
 
 const purgeOldLogs = async (env) => {
+    // 全部日志保留 30 天，30 天后自动删除（除 AI 详情 7 天）
     const purge = async (sql, days) => {
         try {
             const r = await env.DB.prepare(sql).bind(`-${Math.max(1, days)} days`).run();
@@ -29,12 +30,15 @@ const purgeOldLogs = async (env) => {
         } catch { return 0; }
     };
     const summary = {
-        audit_technical: await purge("DELETE FROM audit_technical WHERE created_at_cst IS NOT NULL AND created_at_cst < datetime('now', '+8 hours', ?)", 90),
-        audit_financial: await purge("DELETE FROM audit_financial WHERE created_at_cst IS NOT NULL AND created_at_cst < datetime('now', '+8 hours', ?)", 90),
+        audit_technical: await purge("DELETE FROM audit_technical WHERE created_at_cst IS NOT NULL AND created_at_cst < datetime('now', '+8 hours', ?)", 30),
+        audit_financial: await purge("DELETE FROM audit_financial WHERE created_at_cst IS NOT NULL AND created_at_cst < datetime('now', '+8 hours', ?)", 30),
         login_attempts: await purge("DELETE FROM login_attempts WHERE updated_at < datetime('now', ?)", 30),
         ai_tasks: await purge("DELETE FROM ai_committee_tasks WHERE finished_at IS NOT NULL AND finished_at < datetime('now', ?)", 30),
-        ai_runs: await purge("DELETE FROM ai_committee_runs WHERE created_at_cst IS NOT NULL AND created_at_cst < datetime('now', '+8 hours', ?)", 180),
-        ai_rss_cache: await purge("DELETE FROM meta WHERE key='ai.rss.cache' AND updated_at < datetime('now', ?)", 7)
+        ai_runs: await purge("DELETE FROM ai_committee_runs WHERE created_at_cst IS NOT NULL AND created_at_cst < datetime('now', '+8 hours', ?)", 30),
+        ai_role_calls: await purge("DELETE FROM audit_technical WHERE scope LIKE 'ai.role.%' AND created_at_cst IS NOT NULL AND created_at_cst < datetime('now', '+8 hours', ?)", 30),
+        ai_rss_cache: await purge("DELETE FROM meta WHERE key='ai.rss.cache' AND updated_at < datetime('now', ?)", 7),
+        bank_transfers: await purge("DELETE FROM bank_transfers WHERE created_at IS NOT NULL AND created_at < datetime('now', ?)", 30),
+        comments: await purge("DELETE FROM comments WHERE created_at IS NOT NULL AND created_at < datetime('now', ?)", 30)
     };
     return summary;
 };
